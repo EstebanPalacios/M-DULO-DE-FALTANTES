@@ -3826,7 +3826,16 @@ async function iniciarAppLocal(){
     mostrarLogin();
   }
 }
-iniciarAppLocal();
+// Si esta página se abrió como la VENTANA EMERGENTE del login de
+// Microsoft (no la pestaña principal), no hay que inicializar toda la
+// app ahí -- solo dejar que MSAL complete el proceso y cierre la
+// ventana sola. Sin esto, la app se vuelve a arrancar DENTRO del
+// popup y MSAL lo bloquea (error "block_nested_popups").
+if(window.opener && window.opener !== window){
+  document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#57616F;">Completando el inicio de sesión…</div>';
+} else {
+  iniciarAppLocal();
+}
 
 
 /* ============================================================
