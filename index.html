@@ -2804,13 +2804,15 @@ async function graphFetch(path, opciones){
 }
 
 /* Resuelve el link de la carpeta compartida a un driveId real, y
-   ubica el archivo Excel dentro. Se hace UNA vez por sesión. */
+   ubica el archivo Excel principal dentro. Se hace UNA vez por sesión. */
+let SP_FOLDER_ID_RAIZ = null;
 async function resolverArchivoExcel(){
   const b64 = btoa(unescape(encodeURIComponent(SP_CONFIG.shareUrl)))
     .replace(/=+$/,'').replace(/\//g,'_').replace(/\+/g,'-');
   const shareId = 'u!' + b64;
   const carpeta = await graphFetch(`/shares/${shareId}/driveItem?$expand=children`);
   SP_DRIVE_ID = carpeta.parentReference.driveId;
+  SP_FOLDER_ID_RAIZ = carpeta.id;
   const archivo = (carpeta.children||[]).find(f=>f.name === SP_CONFIG.nombreArchivo);
   if(!archivo){
     throw new Error(`No encontré el archivo '${SP_CONFIG.nombreArchivo}' en la carpeta de SharePoint. Verifica que esté subido ahí con ese nombre exacto.`);
@@ -2819,93 +2821,177 @@ async function resolverArchivoExcel(){
 }
 
 /* ---------- Tablas de Excel: columnas exactas (deben coincidir con
-   la plantilla ModuloFaltantes.xlsx) ---------- */
+   la plantilla ModuloFaltantes.xlsx). La bitácora vive APARTE, en
+   libros mensuales dentro de la carpeta "Historial" -- ver más abajo. ---------- */
 const COLUMNAS_TABLA = {
   TablaCasos: ["caso_id","id_negocio","bodega_id","codigo","prioritario","fecha_novedad","producto","generico",
      "planeador","laboratorio","division","bodega_origen","cant_pedido","total_necesidad",
      "fecha_entrega_antigua","num_pedidos","num_preagendas","inventario","oc_bodega_destino",
      "oc_bodega_origen","pendiente","traslado","solicitud_traslado","inv_ss","tipo_novedad",
      "tipo_novedad_original","cuenta","modulo_actual","responsable","estado_gestion",
-     "codigo_alternativa","activo","fecha_creacion","fecha_ultima_actividad","fecha_cierre"],
+     "codigo_alternativa","activo","fecha_creacion","fecha_ultima_actividad","fecha_cierre",
+     "tiene_bitacora","ultima_bitacora_fecha","ultima_bitacora_nota_predefinida_id",
+     "ultima_bitacora_nota_libre","ultima_bitacora_usuario_id"],
   TablaPacientes: ["paciente_row_id","caso_id","numero_pedido","fecha_pedido","fecha_a_facturar",
      "fecha_entrega_promesa","unds_pedidas","unds_despachadas","pend_x_despachar","stock_erp",
      "stock_seg","disponible","pventa","pesos","laboratorio","agente","nit_paciente",
      "nombre_paciente","cuenta","observaciones","activo"],
-  TablaBitacora: ["bitacora_id","caso_id","paciente_row_id","modulo","nota_predefinida_id","nota_libre",
-     "usuario_id","fecha","es_automatica"],
   TablaTransferencias: ["transferencia_id","caso_id","modulo_origen","modulo_destino","nota","usuario_id","fecha"],
   TablaUsuarios: ["usuario_id","nombre","email","rol","modulo_asignado","activo","fecha_creacion"],
   TablaNotas: ["nota_predef_id","modulo","texto","orden","activo"],
 };
-function filaAObjeto(tabla, valores){
-  const cols = COLUMNAS_TABLA[tabla];
+const COLUMNAS_BITACORA = ["bitacora_id","caso_id","paciente_row_id","modulo","nota_predefinida_id",
+  "nota_libre","usuario_id","fecha","es_automatica"];
+
+function filaAObjetoCols(cols, valores){
   const obj = {};
   cols.forEach((c,i)=>{ obj[c] = valores[i]===''?null:valores[i]; });
   return obj;
 }
-function objetoAFila(tabla, obj){
-  const cols = COLUMNAS_TABLA[tabla];
+function objetoAFilaCols(cols, obj){
   return cols.map(c=> obj[c]===undefined || obj[c]===null ? '' : obj[c]);
 }
+function filaAObjeto(tabla, valores){ return filaAObjetoCols(COLUMNAS_TABLA[tabla], valores); }
+function objetoAFila(tabla, obj){ return objetoAFilaCols(COLUMNAS_TABLA[tabla], obj); }
 
-/* Caché breve en memoria por tabla, para no releer todo en cada
-   pequeña operación dentro del mismo flujo (p.ej. listar + enriquecer). */
+/* Caché breve en memoria por tabla+libro, para no releer todo en cada
+   pequeña operación dentro del mismo flujo. */
 let _cacheTablas = {}, _cacheTablasEn = {};
-async function leerTabla(tabla, forzar){
-  if(!forzar && _cacheTablas[tabla] && (Date.now()-(_cacheTablasEn[tabla]||0)) < 4000) return _cacheTablas[tabla];
-  const r = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}/workbook/tables/${tabla}/rows`);
-  const filas = (r.value||[]).map((fila, idx)=> ({...filaAObjeto(tabla, fila.values[0]), _indice: idx}));
-  _cacheTablas[tabla] = filas;
-  _cacheTablasEn[tabla] = Date.now();
+async function leerTablaEn(driveId, itemId, tabla, cols, forzar){
+  const clave = itemId + '|' + tabla;
+  if(!forzar && _cacheTablas[clave] && (Date.now()-(_cacheTablasEn[clave]||0)) < 4000) return _cacheTablas[clave];
+  const r = await graphFetch(`/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows`);
+  const filas = (r.value||[]).map((fila, idx)=> ({...filaAObjetoCols(cols, fila.values[0]), _indice: idx}));
+  _cacheTablas[clave] = filas;
+  _cacheTablasEn[clave] = Date.now();
   return filas;
 }
-function invalidarCacheTablas(){ _cacheTablas = {}; _cacheTablasEn = {}; }
-async function agregarFila(tabla, obj){
-  const valores = objetoAFila(tabla, obj);
-  await graphFetch(`/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}/workbook/tables/${tabla}/rows/add`, {
+function invalidarCacheTablas(itemId, tabla){
+  if(itemId && tabla){ delete _cacheTablas[itemId+'|'+tabla]; delete _cacheTablasEn[itemId+'|'+tabla]; }
+  else { _cacheTablas = {}; _cacheTablasEn = {}; }
+}
+async function agregarFilaEn(driveId, itemId, tabla, cols, obj){
+  const valores = objetoAFilaCols(cols, obj);
+  await graphFetch(`/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows/add`, {
     method: 'POST', body: JSON.stringify({values: [valores]}),
   });
-  invalidarCacheTablas();
+  invalidarCacheTablas(itemId, tabla);
 }
-async function actualizarFilaPorId(tabla, idCampo, idValor, cambios){
-  const filas = await leerTabla(tabla, true);
+async function actualizarFilaPorIdEn(driveId, itemId, tabla, cols, idCampo, idValor, cambios){
+  const filas = await leerTablaEn(driveId, itemId, tabla, cols, true);
   const fila = filas.find(f=> String(f[idCampo]) === String(idValor));
   if(!fila) throw new Error(`No se encontró la fila con ${idCampo}=${idValor} en ${tabla}.`);
   const combinado = {...fila, ...cambios};
   delete combinado._indice;
-  const valores = objetoAFila(tabla, combinado);
-  await graphFetch(`/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}/workbook/tables/${tabla}/rows/itemAt(index=${fila._indice})`, {
+  const valores = objetoAFilaCols(cols, combinado);
+  await graphFetch(`/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows/itemAt(index=${fila._indice})`, {
     method: 'PATCH', body: JSON.stringify({values: [valores]}),
   });
-  invalidarCacheTablas();
+  invalidarCacheTablas(itemId, tabla);
 }
+// Atajos para el archivo PRINCIPAL (Casos/Pacientes/Transferencias/Usuarios/Notas)
+async function leerTabla(tabla, forzar){ return leerTablaEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], forzar); }
+async function agregarFila(tabla, obj){ return agregarFilaEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], obj); }
+async function actualizarFilaPorId(tabla, idCampo, idValor, cambios){ return actualizarFilaPorIdEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], idCampo, idValor, cambios); }
+
 function uid(){ return crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(36).slice(2); }
 function ldbAhora(){ return new Date().toISOString(); }
 function ldbHoy(){ return new Date().toISOString().slice(0,10); }
 function ldbDiasEntre(a,b){ if(!a||!b) return null; return Math.round((new Date(b.slice(0,10))-new Date(a.slice(0,10)))/86400000); }
 function ldbDiasAbierto(f){ return f ? Math.max(0, ldbDiasEntre(f, ldbAhora())) : 0; }
 function ldbPrioridad(c,d){ if(c.prioritario && d>10) return 'Alta'; if(c.prioritario || d>15) return 'Alta'; if(d>7) return 'Media'; return 'Baja'; }
+function ldbMesDe(fechaISO){ return (fechaISO||ldbHoy()).slice(0,7); }
+function ldbMesesEntre(mesInicio, mesFin){
+  const meses = [];
+  let [y,m] = mesInicio.split('-').map(Number);
+  const [yFin,mFin] = mesFin.split('-').map(Number);
+  while(y<yFin || (y===yFin && m<=mFin)){
+    meses.push(`${y}-${String(m).padStart(2,'0')}`);
+    m++; if(m>12){ m=1; y++; }
+  }
+  return meses;
+}
 
-/* Trae casos + sus pacientes/bitácora/transferencias relacionados
-   (equivalente a los JOIN de la versión SQL) y arma el objeto
-   enriquecido, igual que en las versiones anteriores. */
+/* ---------- Carpeta "Historial" y libros mensuales de bitácora,
+   creados solos la primera vez que hacen falta ---------- */
+const BITACORA_PLANTILLA_B64 = "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";
+let _folderIdHistorial = null;
+async function _folderHistorial(){
+  if(_folderIdHistorial) return _folderIdHistorial;
+  const hijos = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${SP_FOLDER_ID_RAIZ}/children`);
+  const existente = (hijos.value||[]).find(f=>f.name==='Historial' && f.folder);
+  if(existente){ _folderIdHistorial = existente.id; return _folderIdHistorial; }
+  const creada = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${SP_FOLDER_ID_RAIZ}/children`, {
+    method:'POST', body: JSON.stringify({name:'Historial', folder:{}, '@microsoft.graph.conflictBehavior':'rename'}),
+  });
+  _folderIdHistorial = creada.id;
+  return _folderIdHistorial;
+}
+function _b64ToUint8(b64){
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+let _librosMes = {}; // 'YYYY-MM' -> {driveId, itemId}
+async function libroDelMes(aaaaMm){
+  if(_librosMes[aaaaMm]) return _librosMes[aaaaMm];
+  const folderId = await _folderHistorial();
+  const nombre = `Bitacora_${aaaaMm}.xlsx`;
+  const hijos = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${folderId}/children`);
+  let itemId = (hijos.value||[]).find(f=>f.name===nombre)?.id;
+  if(!itemId){
+    const bytes = _b64ToUint8(BITACORA_PLANTILLA_B64);
+    const subido = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${folderId}:/${nombre}:/content`, {
+      method:'PUT', body: bytes, headers: {'Content-Type':'application/octet-stream'},
+    });
+    itemId = subido.id;
+  }
+  _librosMes[aaaaMm] = {driveId: SP_DRIVE_ID, itemId};
+  return _librosMes[aaaaMm];
+}
+async function listarMesesDisponibles(){
+  const folderId = await _folderHistorial();
+  const hijos = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${folderId}/children`);
+  return (hijos.value||[])
+    .map(f=>f.name).filter(n=>n.startsWith('Bitacora_') && n.endsWith('.xlsx'))
+    .map(n=>n.slice('Bitacora_'.length, -('.xlsx'.length))).sort();
+}
+async function leerBitacoraDelMes(aaaaMm, forzar){
+  const {driveId, itemId} = await libroDelMes(aaaaMm);
+  return leerTablaEn(driveId, itemId, 'TablaBitacora', COLUMNAS_BITACORA, forzar);
+}
+async function agregarBitacoraEnMes(aaaaMm, obj){
+  const {driveId, itemId} = await libroDelMes(aaaaMm);
+  return agregarFilaEn(driveId, itemId, 'TablaBitacora', COLUMNAS_BITACORA, obj);
+}
+/* Bitácora completa de UN caso, revisando desde su mes de creación
+   hasta el mes actual (acotado -- solo se usa al abrir el detalle). */
+async function leerBitacoraDeCaso(casoId, fechaCreacion){
+  const meses = ldbMesesEntre(ldbMesDe(fechaCreacion), ldbMesDe(ldbAhora()));
+  const porMes = await Promise.all(meses.map(m=>leerBitacoraDelMes(m)));
+  return porMes.flat().filter(b=>String(b.caso_id)===String(casoId));
+}
+
+/* Trae casos + sus pacientes/transferencias relacionados. La bitácora
+   NO se lee aquí -- las listas usan el resumen (tiene_bitacora,
+   ultima_bitacora_*) que ya vive directo en la fila del caso, así se
+   mantienen rápidas sin importar cuánta bitácora se acumule. */
 async function ldbTodosCasosEnriquecidos(){
-  const [casos, pacientes, bitacora, transferencias] = await Promise.all([
-    leerTabla('TablaCasos'), leerTabla('TablaPacientes'), leerTabla('TablaBitacora'), leerTabla('TablaTransferencias'),
+  const [casos, pacientes, transferencias] = await Promise.all([
+    leerTabla('TablaCasos'), leerTabla('TablaPacientes'), leerTabla('TablaTransferencias'),
   ]);
   return casos.map(c=>{
     const pacientesCaso = pacientes.filter(p=>String(p.caso_id)===String(c.caso_id) && p.activo);
-    const bitacoraCaso = bitacora.filter(b=>String(b.caso_id)===String(c.caso_id));
     const transferenciasCaso = transferencias.filter(t=>String(t.caso_id)===String(c.caso_id));
     const diasAbierto = c.activo ? ldbDiasAbierto(c.fecha_creacion) : (c.fecha_cierre ? ldbDiasEntre(c.fecha_creacion, c.fecha_cierre) : 0);
-    const bitacorasReales = bitacoraCaso.filter(b=>!b.es_automatica);
     const ultimaTransferencia = transferenciasCaso.length ? transferenciasCaso.reduce((a,b)=>a.fecha>b.fecha?a:b).fecha : null;
-    const ultimaBitacora = bitacorasReales.length ? bitacorasReales.reduce((a,b)=>a.fecha>b.fecha?a:b).fecha : null;
+    const ultimaBitacora = c.ultima_bitacora_fecha || null;
     return {
-      ...c, pacientes: pacientesCaso, bitacora: bitacoraCaso, transferencias: transferenciasCaso,
+      ...c, pacientes: pacientesCaso, transferencias: transferenciasCaso,
       dias_abierto: diasAbierto, prioridad: ldbPrioridad(c, diasAbierto),
-      ultima_transferencia_fecha: ultimaTransferencia, ultima_bitacora_fecha: ultimaBitacora,
-      tiene_bitacora: bitacorasReales.length>0,
+      ultima_transferencia_fecha: ultimaTransferencia,
+      tiene_bitacora: !!c.tiene_bitacora,
       transferido: !!(ultimaTransferencia && (!ultimaBitacora || ultimaBitacora<ultimaTransferencia)),
     };
   });
@@ -2935,9 +3021,11 @@ async function ldbObtenerCaso(casoId){
   const todos = await ldbTodosCasosEnriquecidos();
   const caso = todos.find(c=>String(c.caso_id)===String(casoId));
   if(!caso) throw new Error(`No existe el caso ${casoId}`);
-  const [usuarios, notas] = await Promise.all([leerTabla('TablaUsuarios'), leerTabla('TablaNotas')]);
+  const [usuarios, notas, bitacoraCompleta] = await Promise.all([
+    leerTabla('TablaUsuarios'), leerTabla('TablaNotas'), leerBitacoraDeCaso(casoId, caso.fecha_creacion),
+  ]);
   caso.pacientes = caso.pacientes.slice().sort((a,b)=>(a.fecha_a_facturar||'').localeCompare(b.fecha_a_facturar||''));
-  caso.bitacora = caso.bitacora.map(b=>{
+  caso.bitacora = bitacoraCompleta.map(b=>{
     const nota = notas.find(n=>String(n.nota_predef_id)===String(b.nota_predefinida_id));
     const autor = usuarios.find(u=>String(u.usuario_id)===String(b.usuario_id));
     return {...b, nota_predefinida_texto: nota?nota.texto:null, autor: autor?autor.nombre:'—'};
@@ -2945,27 +3033,34 @@ async function ldbObtenerCaso(casoId){
   return caso;
 }
 
-/* ---------- BITÁCORA ---------- */
+/* ---------- BITÁCORA — se escribe en el libro del MES ACTUAL, y se
+   deja un resumen directo en la fila del caso (solo notas reales,
+   nunca las automáticas de transferencia) para que las listas no
+   tengan que abrir ningún archivo mensual. ---------- */
 async function ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, usuarioId, pacienteRowId, esAutomatica){
   if(!notaPredefinidaId && !(notaLibre && notaLibre.trim())) throw new Error('Debes indicar una nota predefinida o escribir una nota libre.');
-  await agregarFila('TablaBitacora', {
+  const ahora = ldbAhora();
+  await agregarBitacoraEnMes(ldbMesDe(ahora), {
     bitacora_id: uid(), caso_id: casoId, paciente_row_id: pacienteRowId||'', modulo,
     nota_predefinida_id: notaPredefinidaId||'', nota_libre: notaLibre||'',
-    usuario_id: usuarioId, fecha: ldbAhora(), es_automatica: !!esAutomatica,
+    usuario_id: usuarioId, fecha: ahora, es_automatica: !!esAutomatica,
   });
-  await actualizarFilaPorId('TablaCasos', 'caso_id', casoId, {fecha_ultima_actividad: ldbAhora()});
+  const cambios = {fecha_ultima_actividad: ahora};
+  if(!esAutomatica){
+    Object.assign(cambios, {
+      tiene_bitacora: true, ultima_bitacora_fecha: ahora,
+      ultima_bitacora_nota_predefinida_id: notaPredefinidaId||'', ultima_bitacora_nota_libre: notaLibre||'',
+      ultima_bitacora_usuario_id: usuarioId,
+    });
+  }
+  await actualizarFilaPorId('TablaCasos', 'caso_id', casoId, cambios);
   return {ok:true};
 }
 async function ldbAgregarBitacoraLote(casoIds, modulo, notaPredefinidaId, notaLibre, usuarioId){
   if(!casoIds || !casoIds.length) throw new Error('No se enviaron casos para la nota masiva.');
   if(!notaPredefinidaId && !(notaLibre && notaLibre.trim())) throw new Error('Debes indicar una nota predefinida o escribir una nota libre.');
   for(const casoId of casoIds){
-    await agregarFila('TablaBitacora', {
-      bitacora_id: uid(), caso_id: casoId, paciente_row_id:'', modulo,
-      nota_predefinida_id: notaPredefinidaId||'', nota_libre: notaLibre||'',
-      usuario_id: usuarioId, fecha: ldbAhora(), es_automatica:false,
-    });
-    await actualizarFilaPorId('TablaCasos', 'caso_id', casoId, {fecha_ultima_actividad: ldbAhora()});
+    await ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, usuarioId, null, false);
   }
   return {ok:true, casos_afectados: casoIds.length};
 }
@@ -2975,69 +3070,22 @@ async function ldbNotasPredefinidas(modulo){
     .map(n=>({nota_predef_id:n.nota_predef_id, texto:n.texto, orden:n.orden}));
 }
 
-/* ---------- ADMINISTRACIÓN: notas ---------- */
-async function ldbListarNotasAdmin(){
-  const notas = await leerTabla('TablaNotas', true);
-  return [...notas].sort((a,b)=>a.modulo.localeCompare(b.modulo)||a.orden-b.orden||a.texto.localeCompare(b.texto));
-}
-async function ldbCrearNotaPredefinida(modulo, texto, orden){
-  if(!['CNG','Abastecimiento','Aliados'].includes(modulo)) throw new Error(`Módulo inválido: ${modulo}`);
-  texto = (texto||'').trim();
-  if(!texto) throw new Error('El texto de la nota no puede estar vacío.');
-  if(texto.length>300) throw new Error('El texto de la nota no puede superar 300 caracteres.');
-  await agregarFila('TablaNotas', {nota_predef_id: uid(), modulo, texto, orden: orden||0, activo:true});
-  return {ok:true};
-}
-async function ldbActualizarNotaPredefinida(notaId, texto, orden, activo){
-  const cambios = {};
-  if(texto!=null){
-    texto=texto.trim();
-    if(!texto) throw new Error('El texto de la nota no puede estar vacío.');
-    if(texto.length>300) throw new Error('El texto de la nota no puede superar 300 caracteres.');
-    cambios.texto = texto;
-  }
-  if(orden!=null) cambios.orden = orden;
-  if(activo!=null) cambios.activo = activo;
-  await actualizarFilaPorId('TablaNotas', 'nota_predef_id', notaId, cambios);
-  return {ok:true};
-}
-
-/* ---------- ADMINISTRACIÓN: usuarios (correo + rol, sin contraseña) ---------- */
-async function ldbListarUsuarios(){
-  const usuarios = await leerTabla('TablaUsuarios', true);
-  return [...usuarios].sort((a,b)=>(b.activo-a.activo)||a.nombre.localeCompare(b.nombre));
-}
-async function ldbCrearUsuario(nombre, email, rol, moduloAsignado){
-  nombre=(nombre||'').trim(); email=(email||'').trim().toLowerCase();
-  if(!nombre || !email) throw new Error('Nombre y correo son obligatorios.');
-  if(rol!=='admin' && !['CNG','Abastecimiento','Aliados'].includes(rol)) throw new Error(`Rol inválido: ${rol}`);
-  if(rol!=='admin' && !moduloAsignado) moduloAsignado = rol;
-  const existentes = await leerTabla('TablaUsuarios', true);
-  if(existentes.some(u=>(u.email||'').toLowerCase()===email)) throw new Error(`Ya existe un usuario con el correo '${email}'.`);
-  await agregarFila('TablaUsuarios', {usuario_id: uid(), nombre, email, rol, modulo_asignado: moduloAsignado||'', activo:true, fecha_creacion: ldbAhora()});
-  return {ok:true};
-}
-async function ldbActualizarUsuario(usuarioId, activo, rol, moduloAsignado, nombre){
-  const cambios = {};
-  if(nombre!=null){ nombre=nombre.trim(); if(!nombre) throw new Error('El nombre no puede estar vacío.'); cambios.nombre=nombre; }
-  if(rol!=null){ if(rol!=='admin' && !['CNG','Abastecimiento','Aliados'].includes(rol)) throw new Error(`Rol inválido: ${rol}`); cambios.rol=rol; }
-  if(moduloAsignado!=null) cambios.modulo_asignado = moduloAsignado||'';
-  if(activo!=null) cambios.activo = activo;
-  await actualizarFilaPorId('TablaUsuarios', 'usuario_id', usuarioId, cambios);
-  return {ok:true};
-}
-
-/* ---------- CAMBIOS RECIENTES ---------- */
+/* ---------- CAMBIOS RECIENTES (notificaciones) — revisa el mes actual
+   y, si "desde" cae en el mes anterior, también ese ---------- */
 async function ldbCambiosRecientes(desde){
   const casos = await leerTabla('TablaCasos');
-  const bitacora = await leerTabla('TablaBitacora');
   const nuevos = casos.filter(c=>c.fecha_creacion>=desde).length;
   const cerrados = casos.filter(c=>c.fecha_cierre && c.fecha_cierre>=desde).length;
+  const meses = ldbMesesEntre(ldbMesDe(desde), ldbMesDe(ldbAhora()));
+  const porMes = await Promise.all(meses.map(m=>leerBitacoraDelMes(m).catch(()=>[])));
+  const bitacora = porMes.flat();
   const notas = bitacora.filter(b=>!b.es_automatica && b.fecha>=desde).length;
   return {nuevos, cerrados, notas};
 }
 
-/* ---------- TRANSFERIR ---------- */
+/* ---------- TRANSFERIR — la transferencia en sí se queda en el
+   archivo principal (poco volumen); la nota automática que deja va
+   al libro del mes, igual que cualquier otra nota. ---------- */
 async function ldbTransferirCaso(casoId, moduloDestino, nota, usuarioId){
   if(!['CNG','Abastecimiento','Aliados'].includes(moduloDestino)) throw new Error(`Módulo destino inválido: ${moduloDestino}`);
   if(!nota || !nota.trim()) throw new Error('La nota de transferencia es obligatoria.');
@@ -3047,7 +3095,7 @@ async function ldbTransferirCaso(casoId, moduloDestino, nota, usuarioId){
   const moduloOrigen = caso.modulo_actual;
   if(moduloOrigen===moduloDestino) throw new Error(`El caso ya está en el módulo ${moduloDestino}.`);
   await agregarFila('TablaTransferencias', {transferencia_id: uid(), caso_id: casoId, modulo_origen: moduloOrigen, modulo_destino: moduloDestino, nota, usuario_id: usuarioId, fecha: ldbAhora()});
-  await agregarFila('TablaBitacora', {bitacora_id: uid(), caso_id: casoId, paciente_row_id:'', modulo: moduloDestino, nota_predefinida_id:'', nota_libre:`Transferido desde ${moduloOrigen}: ${nota}`, usuario_id: usuarioId, fecha: ldbAhora(), es_automatica:true});
+  await ldbAgregarBitacora(casoId, moduloDestino, null, `Transferido desde ${moduloOrigen}: ${nota}`, usuarioId, null, true);
   await actualizarFilaPorId('TablaCasos', 'caso_id', casoId, {modulo_actual: moduloDestino, fecha_ultima_actividad: ldbAhora()});
   return {ok:true, modulo_origen:moduloOrigen, modulo_destino:moduloDestino};
 }
@@ -3076,15 +3124,10 @@ async function ldbExportarCasos(fechaDesde, fechaHasta){
     return true;
   });
   if(!casos.length) return [];
-  const notas = await leerTabla('TablaNotas');
   casos.forEach(c=>{
     c.estado = c.activo ? 'Abierto' : 'Cerrado';
     if(!c.activo && c.fecha_cierre && c.fecha_creacion) c.dias_abierto = ldbDiasEntre(c.fecha_creacion, c.fecha_cierre);
     c.novedad_original = c.tipo_novedad_original || c.tipo_novedad;
-    const bitacorasCaso = c.bitacora.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
-    const primera = bitacorasCaso[0];
-    c.primera_bitacora_fecha = primera ? primera.fecha : null;
-    c.primera_bitacora_texto = primera ? (notas.find(n=>String(n.nota_predef_id)===String(primera.nota_predefinida_id))?.texto || primera.nota_libre) : null;
   });
   const filasExport = [];
   casos.forEach(c=>{
@@ -3105,7 +3148,10 @@ async function ldbExportarCasos(fechaDesde, fechaHasta){
   return filasExport;
 }
 
-/* ---------- RESUMEN DE GESTIÓN ---------- */
+/* ---------- RESUMEN DE GESTIÓN — el detalle por caso usa el resumen
+   que ya vive en la fila (sin abrir archivos); "actividad reciente"
+   sitewide sí revisa el libro del mes actual (y el anterior si hace
+   falta completar 15). ---------- */
 async function ldbResumenGestion(){
   const todos = await ldbTodosCasosEnriquecidos();
   const casos = todos.filter(c=>c.activo);
@@ -3118,27 +3164,36 @@ async function ldbResumenGestion(){
   const porModulo = {};
   casos.forEach(c=>{ porModulo[c.modulo_actual]=(porModulo[c.modulo_actual]||0)+1; });
   const [usuarios, notas] = await Promise.all([leerTabla('TablaUsuarios'), leerTabla('TablaNotas')]);
-  const todasNotasReales = [];
-  casos.forEach(c=>c.bitacora.forEach(b=>{ if(!b.es_automatica) todasNotasReales.push({...b, _codigo:c.codigo, _producto:c.producto}); }));
-  const actividadReciente = todasNotasReales.sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,15).map(b=>{
+
+  const mesActual = ldbMesDe(ldbAhora());
+  let bitacoraReciente = (await leerBitacoraDelMes(mesActual).catch(()=>[])).filter(b=>!b.es_automatica);
+  if(bitacoraReciente.length < 15){
+    const [y,m] = mesActual.split('-').map(Number);
+    const mesAnterior = m===1 ? `${y-1}-12` : `${y}-${String(m-1).padStart(2,'0')}`;
+    const anteriores = (await leerBitacoraDelMes(mesAnterior).catch(()=>[])).filter(b=>!b.es_automatica);
+    bitacoraReciente = bitacoraReciente.concat(anteriores);
+  }
+  const casosPorId = {}; casos.forEach(c=>casosPorId[c.caso_id]=c);
+  const actividadReciente = bitacoraReciente
+    .filter(b=>casosPorId[b.caso_id])
+    .sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,15).map(b=>{
     const nota = notas.find(n=>String(n.nota_predef_id)===String(b.nota_predefinida_id));
     const autor = usuarios.find(u=>String(u.usuario_id)===String(b.usuario_id));
+    const c = casosPorId[b.caso_id];
     return {bitacora_id:b.bitacora_id, modulo:b.modulo, nota_libre:b.nota_libre, fecha:b.fecha,
-      nota_predefinida_texto: nota?nota.texto:null, autor: autor?autor.nombre:'—', codigo:b._codigo, producto:b._producto};
+      nota_predefinida_texto: nota?nota.texto:null, autor: autor?autor.nombre:'—', codigo:c.codigo, producto:c.producto};
   });
   casos.forEach(c=>{
-    const notasReales = c.bitacora.filter(b=>!b.es_automatica).sort((a,b)=>b.fecha.localeCompare(a.fecha));
-    const ultima = notasReales[0];
-    if(!ultima){ c.ultima_bitacora = null; return; }
-    const nota = notas.find(n=>String(n.nota_predef_id)===String(ultima.nota_predefinida_id));
-    const autor = usuarios.find(u=>String(u.usuario_id)===String(ultima.usuario_id));
-    c.ultima_bitacora = {nota_libre:ultima.nota_libre, fecha:ultima.fecha, nota_predefinida_texto: nota?nota.texto:null, autor: autor?autor.nombre:'—'};
+    if(!c.tiene_bitacora){ c.ultima_bitacora = null; return; }
+    const nota = notas.find(n=>String(n.nota_predef_id)===String(c.ultima_bitacora_nota_predefinida_id));
+    const autor = usuarios.find(u=>String(u.usuario_id)===String(c.ultima_bitacora_usuario_id));
+    c.ultima_bitacora = {nota_libre:c.ultima_bitacora_nota_libre, fecha:c.ultima_bitacora_fecha,
+      nota_predefinida_texto: nota?nota.texto:null, autor: autor?autor.nombre:'—'};
   });
   return {total_activos:total, prioridad_alta:alta, mas_de_15_dias:viejos, transferencias_hoy:transferenciasHoy,
     por_modulo:porModulo, casos, actividad_reciente:actividadReciente};
 }
 
-/* ---------- INDICADORES ---------- */
 async function ldbIndicadores(fechaDesde, fechaHasta){
   const todos = await ldbTodosCasosEnriquecidos();
   const enRango = c=>{
