@@ -1190,6 +1190,13 @@ function fechaCorta(f){
   catch(e){ return f; }
 }
 function novedadConFecha(caso){
+  // "Agotado" sin fecha estimada no es un agotado confirmado -- es un caso
+  // sin una novedad clara en la fuente de datos. Mostrarlo como "Agotado"
+  // sin más contexto es engañoso (así llegó el reporte de que aparecía
+  // "agotado" en casos que en realidad no lo estaban).
+  if(caso.tipo_novedad === 'Agotado' && !caso.fecha_novedad){
+    return `<span class="badge b-faltante" title="No llegó con una fecha estimada de novedad -- no se puede confirmar como agotado">Sin novedad clara</span>`;
+  }
   let html = tipoBadge(caso.tipo_novedad);
   if(caso.tipo_novedad === 'Agotado' && caso.fecha_novedad){
     html += ` <span style="font-size:11px;color:var(--muted);">hasta ${fechaCorta(caso.fecha_novedad)}</span>`;
@@ -1348,7 +1355,13 @@ document.getElementById('transfer-save').addEventListener('click', async ()=>{
   if(!nota){ toast('La nota de transferencia es obligatoria.'); return; }
   const btn = document.getElementById('transfer-save'); btn.disabled = true;
   try{
-    await Promise.all(transferCasoIds.map(id => apiPost(`casos/${id}/transferir?debug=true`, {modulo_destino: destino, nota, usuario_id: getSesion().usuario_id})));
+    // Una por una (no en paralelo): varias escrituras al mismo tiempo contra
+    // el mismo libro de Excel pueden chocar/perder cambios entre sí. Con la
+    // sesión de Excel reusada + menos llamadas por transferencia, hacerlo en
+    // serie sigue siendo rápido incluso para varias bodegas de una molécula.
+    for(const id of transferCasoIds){
+      await apiPost(`casos/${id}/transferir?debug=true`, {modulo_destino: destino, nota, usuario_id: getSesion().usuario_id});
+    }
     document.getElementById('transfer-overlay').classList.remove('active');
     toast(`Transferencia registrada (${transferCasoIds.length} caso(s)).`, true);
     refreshAll();
@@ -2450,8 +2463,7 @@ function alBodegaRow(caso){
     <td>${caso.laboratorio||'<span style="color:var(--muted);">—</span>'}</td>
     <td>${caso.cuenta||'<span style="color:var(--muted);">—</span>'}</td>
     <td style="text-align:right;">${caso.num_pedidos??'—'}</td>
-    <td style="text-align:right;font-weight:700;" class="${caso.pendiente<0?'pend-neg':''}">${caso.pendiente??'—'}</td>
-    <td style="text-align:right;">${caso.prioritario ? (caso.pendiente??'—') : 0}</td>
+    <td style="text-align:right;font-weight:700;" class="${caso.pendiente<0?'pend-neg':''}">${caso.pendiente??'—'}${caso.prioritario?' <span class="badge b-agotado" style="margin-left:4px;font-weight:400;">Urgente</span>':''}</td>
     <td>${novedadConFecha(caso)}</td>
     <td><button class="icon-btn al-b-bit ${caso.tiene_bitacora?'tiene-bit':''}" data-caso="${caso.caso_id}" title="${caso.tiene_bitacora?'Ya tiene notas de gestión':'Sin notas de gestión todavía'}">${icon('book',15)}</button></td>
   </tr>`;
@@ -2474,7 +2486,7 @@ function alDetailHtml(molecula){
     </div>
     <div class="table-scroll"><table class="excel-like"><thead><tr>
       <th><input type="checkbox" class="al-b-select-all" data-mol="${molecula.codigo}" title="Seleccionar todas"></th><th>Bodega</th><th>Código</th><th>Descripción</th><th>Proveedor</th><th>Cliente</th>
-      <th>Cant. pedidos</th><th>Cant. unid. pendientes</th><th>Cant. unid. urgentes</th><th>Novedad</th><th>Bitácora</th>
+      <th>Cant. pedidos</th><th>Cant. unid. pendientes</th><th>Novedad</th><th>Bitácora</th>
     </tr></thead><tbody>${molecula.casos.map(alBodegaRow).join('')}</tbody></table></div>
     ${alAlternativasHtml()}
   </div>`;
@@ -2804,6 +2816,49 @@ async function graphFetch(path, opciones){
   return r.json();
 }
 
+/* ---------- Sesión de Excel por libro (workbook-session-id) ----------
+   Sin esto, CADA llamada a /workbook/... hace que Excel Online abra el
+   libro completo desde cero (lento, y con varias llamadas seguidas puede
+   chocar/lanzar error de "no se pudo completar la solicitud"). Con una
+   sesión reusada (persistChanges:true), todas las lecturas/escrituras de
+   un mismo libro comparten el mismo Excel ya abierto -- mucho más rápido
+   y estable. Se crea una vez por libro (archivo principal, o cada libro
+   mensual de bitácora) y se reutiliza durante toda la sesión de la app. */
+let SP_SESIONES = {}; // itemId -> sessionId (o null si no se pudo crear)
+async function _sesionExcel(driveId, itemId){
+  if(itemId in SP_SESIONES) return SP_SESIONES[itemId];
+  try{
+    const r = await graphFetch(`/drives/${driveId}/items/${itemId}/workbook/createSession`, {
+      method: 'POST', body: JSON.stringify({persistChanges:true}),
+    });
+    SP_SESIONES[itemId] = r.id;
+  } catch(e){
+    SP_SESIONES[itemId] = null; // seguimos sin sesión -- más lento pero funcional
+  }
+  return SP_SESIONES[itemId];
+}
+/* Igual que graphFetch, pero para rutas /workbook/... -- agrega el header
+   de sesión del libro correspondiente cuando existe. */
+async function graphFetchWB(driveId, itemId, path, opciones){
+  const sesionId = await _sesionExcel(driveId, itemId);
+  opciones = opciones || {};
+  const headers = {...(opciones.headers||{})};
+  if(sesionId) headers['workbook-session-id'] = sesionId;
+  try{
+    return await graphFetch(path, {...opciones, headers});
+  } catch(e){
+    // Si la sesión guardada ya expiró/no es válida, se crea una nueva y se reintenta una vez.
+    if(sesionId && /InvalidSession|SessionNotFound/i.test(e.message||'')){
+      delete SP_SESIONES[itemId];
+      const nueva = await _sesionExcel(driveId, itemId);
+      const headers2 = {...(opciones.headers||{})};
+      if(nueva) headers2['workbook-session-id'] = nueva;
+      return await graphFetch(path, {...opciones, headers: headers2});
+    }
+    throw e;
+  }
+}
+
 /* Resuelve el link de la carpeta compartida a un driveId real, y
    ubica el archivo Excel principal dentro. Se hace UNA vez por sesión. */
 let SP_FOLDER_ID_RAIZ = null;
@@ -2861,7 +2916,7 @@ let _cacheTablas = {}, _cacheTablasEn = {};
 async function leerTablaEn(driveId, itemId, tabla, cols, forzar){
   const clave = itemId + '|' + tabla;
   if(!forzar && _cacheTablas[clave] && (Date.now()-(_cacheTablasEn[clave]||0)) < 4000) return _cacheTablas[clave];
-  const r = await graphFetch(`/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows`);
+  const r = await graphFetchWB(driveId, itemId, `/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows`);
   const filas = (r.value||[]).map((fila, idx)=> ({...filaAObjetoCols(cols, fila.values[0]), _indice: idx}));
   _cacheTablas[clave] = filas;
   _cacheTablasEn[clave] = Date.now();
@@ -2871,29 +2926,53 @@ function invalidarCacheTablas(itemId, tabla){
   if(itemId && tabla){ delete _cacheTablas[itemId+'|'+tabla]; delete _cacheTablasEn[itemId+'|'+tabla]; }
   else { _cacheTablas = {}; _cacheTablasEn = {}; }
 }
-async function agregarFilaEn(driveId, itemId, tabla, cols, obj){
-  const valores = objetoAFilaCols(cols, obj);
-  await graphFetch(`/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows/add`, {
-    method: 'POST', body: JSON.stringify({values: [valores]}),
-  });
+/* Agrega VARIAS filas en una sola llamada a Graph (values acepta una
+   matriz de filas) -- clave para que cargar un informe con cientos de
+   casos/pacientes no haga cientos de idas y vueltas a Microsoft, una por
+   fila, que era la causa real de la lentitud y del error final "no se
+   pudo completar la solicitud" (Graph termina limitando/rechazando tantas
+   solicitudes seguidas). Se manda en bloques de 200 filas por si acaso. */
+async function agregarFilasEn(driveId, itemId, tabla, cols, objs){
+  if(!objs || !objs.length) return;
+  const BLOQUE = 200;
+  for(let i=0;i<objs.length;i+=BLOQUE){
+    const trozo = objs.slice(i, i+BLOQUE);
+    await graphFetchWB(driveId, itemId, `/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows/add`, {
+      method: 'POST', body: JSON.stringify({values: trozo.map(o=>objetoAFilaCols(cols, o))}),
+    });
+  }
   invalidarCacheTablas(itemId, tabla);
+}
+async function agregarFilaEn(driveId, itemId, tabla, cols, obj){
+  return agregarFilasEn(driveId, itemId, tabla, cols, [obj]);
+}
+/* Actualiza una fila cuando YA se conoce su _indice (por ejemplo porque
+   viene de una lectura hecha una sola vez al inicio del flujo) -- evita
+   el patrón "releer toda la tabla antes de cada actualización" que
+   convertía cada carga/transferencia en decenas de lecturas completas
+   innecesarias de la tabla. */
+async function patchFilaIndiceEn(driveId, itemId, tabla, cols, filaConIndice, cambios, opciones){
+  const combinado = {...filaConIndice, ...cambios};
+  delete combinado._indice;
+  const valores = objetoAFilaCols(cols, combinado);
+  await graphFetchWB(driveId, itemId, `/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows/itemAt(index=${filaConIndice._indice})`, {
+    method: 'PATCH', body: JSON.stringify({values: [valores]}),
+  });
+  if(!(opciones && opciones.sinInvalidar)) invalidarCacheTablas(itemId, tabla);
+  return combinado;
 }
 async function actualizarFilaPorIdEn(driveId, itemId, tabla, cols, idCampo, idValor, cambios){
   const filas = await leerTablaEn(driveId, itemId, tabla, cols, true);
   const fila = filas.find(f=> String(f[idCampo]) === String(idValor));
   if(!fila) throw new Error(`No se encontró la fila con ${idCampo}=${idValor} en ${tabla}.`);
-  const combinado = {...fila, ...cambios};
-  delete combinado._indice;
-  const valores = objetoAFilaCols(cols, combinado);
-  await graphFetch(`/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows/itemAt(index=${fila._indice})`, {
-    method: 'PATCH', body: JSON.stringify({values: [valores]}),
-  });
-  invalidarCacheTablas(itemId, tabla);
+  return patchFilaIndiceEn(driveId, itemId, tabla, cols, fila, cambios);
 }
 // Atajos para el archivo PRINCIPAL (Casos/Pacientes/Transferencias/Usuarios/Notas)
 async function leerTabla(tabla, forzar){ return leerTablaEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], forzar); }
 async function agregarFila(tabla, obj){ return agregarFilaEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], obj); }
+async function agregarFilas(tabla, objs){ return agregarFilasEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], objs); }
 async function actualizarFilaPorId(tabla, idCampo, idValor, cambios){ return actualizarFilaPorIdEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], idCampo, idValor, cambios); }
+async function patchFilaIndice(tabla, filaConIndice, cambios, opciones){ return patchFilaIndiceEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], filaConIndice, cambios, opciones); }
 
 function uid(){ return crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(36).slice(2); }
 function ldbAhora(){ return new Date().toISOString(); }
@@ -2902,6 +2981,9 @@ function ldbDiasEntre(a,b){ if(!a||!b) return null; return Math.round((new Date(
 function ldbDiasAbierto(f){ return f ? Math.max(0, ldbDiasEntre(f, ldbAhora())) : 0; }
 function ldbPrioridad(c,d){ if(c.prioritario && d>10) return 'Alta'; if(c.prioritario || d>15) return 'Alta'; if(d>7) return 'Media'; return 'Baja'; }
 function ldbMesDe(fechaISO){ return (fechaISO||ldbHoy()).slice(0,7); }
+// Corta a YYYY-MM-DD de forma segura -- nunca truena si la fecha viene
+// vacía/null (pasa cuando Excel devuelve una celda vacía como null).
+function f10(f){ return f ? String(f).slice(0,10) : ''; }
 function ldbMesesEntre(mesInicio, mesFin){
   const meses = [];
   let [y,m] = mesInicio.split('-').map(Number);
@@ -3038,7 +3120,7 @@ async function ldbObtenerCaso(casoId){
    deja un resumen directo en la fila del caso (solo notas reales,
    nunca las automáticas de transferencia) para que las listas no
    tengan que abrir ningún archivo mensual. ---------- */
-async function ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, usuarioId, pacienteRowId, esAutomatica){
+async function ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, usuarioId, pacienteRowId, esAutomatica, opciones){
   if(!notaPredefinidaId && !(notaLibre && notaLibre.trim())) throw new Error('Debes indicar una nota predefinida o escribir una nota libre.');
   const ahora = ldbAhora();
   await agregarBitacoraEnMes(ldbMesDe(ahora), {
@@ -3046,6 +3128,11 @@ async function ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, 
     nota_predefinida_id: notaPredefinidaId||'', nota_libre: notaLibre||'',
     usuario_id: usuarioId, fecha: ahora, es_automatica: !!esAutomatica,
   });
+  // Cuando quien llama ya va a hacer su propia actualización combinada de la
+  // fila del caso (p.ej. una transferencia, que también cambia modulo_actual),
+  // nos saltamos este PATCH intermedio -- evita una lectura+escritura extra
+  // de la tabla por cada nota, que sumaba innecesariamente a la lentitud.
+  if(opciones && opciones.omitirActualizarCaso) return {ok:true, fecha:ahora};
   const cambios = {fecha_ultima_actividad: ahora};
   if(!esAutomatica){
     Object.assign(cambios, {
@@ -3055,7 +3142,7 @@ async function ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, 
     });
   }
   await actualizarFilaPorId('TablaCasos', 'caso_id', casoId, cambios);
-  return {ok:true};
+  return {ok:true, fecha:ahora};
 }
 async function ldbAgregarBitacoraLote(casoIds, modulo, notaPredefinidaId, notaLibre, usuarioId){
   if(!casoIds || !casoIds.length) throw new Error('No se enviaron casos para la nota masiva.');
@@ -3095,9 +3182,16 @@ async function ldbTransferirCaso(casoId, moduloDestino, nota, usuarioId){
   if(!caso) throw new Error(`No existe el caso ${casoId}`);
   const moduloOrigen = caso.modulo_actual;
   if(moduloOrigen===moduloDestino) throw new Error(`El caso ya está en el módulo ${moduloDestino}.`);
-  await agregarFila('TablaTransferencias', {transferencia_id: uid(), caso_id: casoId, modulo_origen: moduloOrigen, modulo_destino: moduloDestino, nota, usuario_id: usuarioId, fecha: ldbAhora()});
-  await ldbAgregarBitacora(casoId, moduloDestino, null, `Transferido desde ${moduloOrigen}: ${nota}`, usuarioId, null, true);
-  await actualizarFilaPorId('TablaCasos', 'caso_id', casoId, {modulo_actual: moduloDestino, fecha_ultima_actividad: ldbAhora()});
+  const ahora = ldbAhora();
+  await agregarFila('TablaTransferencias', {transferencia_id: uid(), caso_id: casoId, modulo_origen: moduloOrigen, modulo_destino: moduloDestino, nota, usuario_id: usuarioId, fecha: ahora});
+  // La nota automática NO dispara su propio PATCH de la fila del caso --
+  // se combina con el cambio de módulo de abajo en UNA sola escritura,
+  // usando el índice de fila que ya conocemos desde la lectura de arriba
+  // (evita 2 lecturas + 2 escrituras extra de la tabla por transferencia,
+  // que era una de las causas de la lentitud y de que el cambio de módulo
+  // quedara "a medias" si Microsoft cortaba la solicitud en un paso intermedio).
+  await ldbAgregarBitacora(casoId, moduloDestino, null, `Transferido desde ${moduloOrigen}: ${nota}`, usuarioId, null, true, {omitirActualizarCaso:true});
+  await patchFilaIndice('TablaCasos', caso, {modulo_actual: moduloDestino, fecha_ultima_actividad: ahora});
   return {ok:true, modulo_origen:moduloOrigen, modulo_destino:moduloDestino};
 }
 
@@ -3120,8 +3214,8 @@ async function ldbBuscar(termino){
 async function ldbExportarCasos(fechaDesde, fechaHasta){
   const todos = await ldbTodosCasosEnriquecidos();
   let casos = todos.filter(c=>{
-    if(fechaDesde && c.fecha_creacion.slice(0,10) < fechaDesde) return false;
-    if(fechaHasta && c.fecha_creacion.slice(0,10) > fechaHasta) return false;
+    if(fechaDesde && f10(c.fecha_creacion) < fechaDesde) return false;
+    if(fechaHasta && f10(c.fecha_creacion) > fechaHasta) return false;
     return true;
   });
   if(!casos.length) return [];
@@ -3161,7 +3255,7 @@ async function ldbResumenGestion(){
   const viejos = casos.filter(c=>c.dias_abierto>15).length;
   const hoy = ldbHoy();
   let transferenciasHoy = 0;
-  casos.forEach(c=>c.transferencias.forEach(t=>{ if(t.fecha.slice(0,10)===hoy) transferenciasHoy++; }));
+  casos.forEach(c=>c.transferencias.forEach(t=>{ if(f10(t.fecha)===hoy) transferenciasHoy++; }));
   const porModulo = {};
   casos.forEach(c=>{ porModulo[c.modulo_actual]=(porModulo[c.modulo_actual]||0)+1; });
   const [usuarios, notas] = await Promise.all([leerTabla('TablaUsuarios'), leerTabla('TablaNotas')]);
@@ -3198,8 +3292,8 @@ async function ldbResumenGestion(){
 async function ldbIndicadores(fechaDesde, fechaHasta){
   const todos = await ldbTodosCasosEnriquecidos();
   const enRango = c=>{
-    if(fechaDesde && c.fecha_creacion.slice(0,10) < fechaDesde) return false;
-    if(fechaHasta && c.fecha_creacion.slice(0,10) > fechaHasta) return false;
+    if(fechaDesde && f10(c.fecha_creacion) < fechaDesde) return false;
+    if(fechaHasta && f10(c.fecha_creacion) > fechaHasta) return false;
     return true;
   };
   const casos = todos.filter(enRango);
@@ -3212,9 +3306,14 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
   };
   const porTipoMap = {};
   casos.forEach(c=>{
-    if(!porTipoMap[c.tipo_novedad]) porTipoMap[c.tipo_novedad]={tipo_novedad:c.tipo_novedad,total:0,_dias:[]};
-    porTipoMap[c.tipo_novedad].total++;
-    if(!c.activo && c.fecha_cierre) porTipoMap[c.tipo_novedad]._dias.push(ldbDiasEntre(c.fecha_creacion,c.fecha_cierre));
+    // "Agotado" solo cuenta como tal cuando trae una fecha estimada real --
+    // sin fecha clara se cuenta aparte como "Sin novedad clara" (mismo
+    // criterio que ya usa el Panel general), para no mostrar como agotado
+    // algo que la fuente de datos no confirmó.
+    const claveTipo = (c.tipo_novedad==='Agotado' && !c.fecha_novedad) ? 'Sin novedad clara' : c.tipo_novedad;
+    if(!porTipoMap[claveTipo]) porTipoMap[claveTipo]={tipo_novedad:claveTipo,total:0,_dias:[]};
+    porTipoMap[claveTipo].total++;
+    if(!c.activo && c.fecha_cierre) porTipoMap[claveTipo]._dias.push(ldbDiasEntre(c.fecha_creacion,c.fecha_cierre));
   });
   const porTipoNovedad = Object.values(porTipoMap).map(t=>({tipo_novedad:t.tipo_novedad,total:t.total,dias_promedio:t._dias.length?t._dias.reduce((a,b)=>a+b,0)/t._dias.length:null}));
   const porModuloMap = {};
@@ -3227,7 +3326,7 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
   casos.forEach(c=>{ if(c.cuenta){ cuentasMap[c.cuenta]=(cuentasMap[c.cuenta]||0)+1; } });
   const topCuentas = Object.entries(cuentasMap).map(([cuenta,total])=>({cuenta,total})).sort((a,b)=>b.total-a.total).slice(0,10);
   const tendenciaMap = {};
-  casos.forEach(c=>{ const f=c.fecha_creacion.slice(0,10); tendenciaMap[f]=(tendenciaMap[f]||0)+1; });
+  casos.forEach(c=>{ const f=f10(c.fecha_creacion); if(f) tendenciaMap[f]=(tendenciaMap[f]||0)+1; });
   const tendenciaDiaria = Object.entries(tendenciaMap).map(([fecha,total])=>({fecha,total})).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const pacientesAfectados = new Set();
   casos.forEach(c=>c.pacientes.forEach(p=>{ if(p.nit_paciente) pacientesAfectados.add(p.nit_paciente); }));
@@ -3263,7 +3362,7 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
     const fechaHastaPrev = new Date(d1); fechaHastaPrev.setDate(fechaHastaPrev.getDate()-1);
     const fechaDesdePrev = new Date(fechaHastaPrev); fechaDesdePrev.setDate(fechaDesdePrev.getDate()-(dias-1));
     const fhp=fechaHastaPrev.toISOString().slice(0,10), fdp=fechaDesdePrev.toISOString().slice(0,10);
-    const casosPrev = todos.filter(c=>c.fecha_creacion.slice(0,10)>=fdp && c.fecha_creacion.slice(0,10)<=fhp);
+    const casosPrev = todos.filter(c=>f10(c.fecha_creacion)>=fdp && f10(c.fecha_creacion)<=fhp);
     comparacionPeriodoAnterior = {fecha_desde:fdp, fecha_hasta:fhp, total_casos:casosPrev.length, casos_cerrados:casosPrev.filter(c=>!c.activo).length};
   }
   return {general, por_tipo_novedad:porTipoNovedad, por_modulo:porModulo, skus_recurrentes:skusRecurrentes,
@@ -3629,9 +3728,41 @@ async function ejecutarIngestaLocal(files, guardar){
 
   let nIns=0, nUpd=0, nCerr=0, nPac=0, reasignados=0;
 
+  /* ------------------------------------------------------------
+     Todo lo de abajo se arma primero EN MEMORIA (sin llamadas a
+     Microsoft) y se manda en UNAS POCAS llamadas en bloque al final,
+     en vez de una llamada por cada fila (que con cientos de casos y
+     pacientes eran cientos/miles de idas y vueltas — la causa real de
+     la lentitud, del error final "no se pudo completar la solicitud"
+     y de que algunos cambios quedaran a medias si Microsoft cortaba
+     la carga en un punto intermedio).
+     La tabla de pacientes se lee UNA sola vez (no una vez por caso
+     que continúa) para poder ubicar sus filas anteriores. ------------------------------------------------------------ */
+  const pacientesTablaPrevia = (nuevos.length || continuan.length) ? await leerTabla('TablaPacientes', true) : [];
+  const pacientesPreviosPorCaso = {};
+  pacientesTablaPrevia.forEach(p=>{ if(p.activo) (pacientesPreviosPorCaso[p.caso_id] = pacientesPreviosPorCaso[p.caso_id]||[]).push(p); });
+
+  const casosNuevosBatch = [];
+  const pacientesNuevosBatch = [];
+  const casosActualizarBatch = []; // {filaConIndice, cambios}
+  const pacientesDesactivarBatch = []; // {filaConIndice}
+
+  function filaPaciente(casoId, p){
+    return {
+      paciente_row_id: uid(), caso_id: casoId, numero_pedido: p.numero_pedido||'',
+      fecha_pedido: p.fecha_pedido?p.fecha_pedido.toISOString():'',
+      fecha_a_facturar: p.fecha_a_facturar?p.fecha_a_facturar.toISOString():'',
+      fecha_entrega_promesa: p.fecha_entrega_promesa?p.fecha_entrega_promesa.toISOString():'',
+      unds_pedidas: p.unds_pedidas??'', unds_despachadas: p.unds_despachadas??'', pend_x_despachar: p.pend_x_despachar??'',
+      stock_erp: p.stock_erp??'', stock_seg: p.stock_seg??'', disponible: p.disponible??'', pventa: p.pventa??'', pesos: p.pesos??'',
+      laboratorio: p.laboratorio||'', agente: p.agente||'', nit_paciente: p.nit_paciente||'',
+      nombre_paciente: p.nombre_paciente||'', cuenta: p.cuenta||'', observaciones: p.observaciones||'', activo:true,
+    };
+  }
+
   for(const f of nuevos){
     const casoId = uid();
-    await agregarFila('TablaCasos', {
+    casosNuevosBatch.push({
       caso_id: casoId, id_negocio: f.id_caso, bodega_id: parseInt(f.bodega,10)||'', codigo: f.codigo,
       prioritario: String(f.prioritario||'').trim().toUpperCase()==='SI',
       fecha_novedad: f.fecha_novedad?f.fecha_novedad.toISOString():'',
@@ -3647,19 +3778,7 @@ async function ejecutarIngestaLocal(files, guardar){
       codigo_alternativa:'', activo:true, fecha_creacion: ldbAhora(), fecha_ultima_actividad:'', fecha_cierre:'',
     });
     const pacientes = pacientesPorIdCaso[f.id_caso] || [];
-    for(const p of pacientes){
-      await agregarFila('TablaPacientes', {
-        paciente_row_id: uid(), caso_id: casoId, numero_pedido: p.numero_pedido||'',
-        fecha_pedido: p.fecha_pedido?p.fecha_pedido.toISOString():'',
-        fecha_a_facturar: p.fecha_a_facturar?p.fecha_a_facturar.toISOString():'',
-        fecha_entrega_promesa: p.fecha_entrega_promesa?p.fecha_entrega_promesa.toISOString():'',
-        unds_pedidas: p.unds_pedidas??'', unds_despachadas: p.unds_despachadas??'', pend_x_despachar: p.pend_x_despachar??'',
-        stock_erp: p.stock_erp??'', stock_seg: p.stock_seg??'', disponible: p.disponible??'', pventa: p.pventa??'', pesos: p.pesos??'',
-        laboratorio: p.laboratorio||'', agente: p.agente||'', nit_paciente: p.nit_paciente||'',
-        nombre_paciente: p.nombre_paciente||'', cuenta: p.cuenta||'', observaciones: p.observaciones||'', activo:true,
-      });
-      nPac++;
-    }
+    pacientes.forEach(p=>{ pacientesNuevosBatch.push(filaPaciente(casoId, p)); nPac++; });
     nIns++;
   }
 
@@ -3679,35 +3798,43 @@ async function ejecutarIngestaLocal(files, guardar){
       pendiente: f.pendiente??'', traslado: f.traslado||'', solicitud_traslado: f.solicitud_traslado||'',
       inv_ss: f.inv_ss||'', tipo_novedad: f.tipo_novedad, cuenta: f.cuenta||'', fecha_ultima_actividad: ldbAhora(),
     };
+    // Si el caso YA fue transferido manualmente alguna vez, se respeta esa
+    // decisión humana y NO se reasigna de módulo solo — se queda donde una
+    // persona lo puso, incluso si la novedad sigue apareciendo día a día.
     if(!tieneTransferenciaPrevia){ cambios.modulo_actual = f.modulo_sugerido; reasignados++; }
-    await actualizarFilaPorId('TablaCasos', 'caso_id', casoPrevio.caso_id, cambios);
+    casosActualizarBatch.push({filaConIndice: casoPrevio, cambios});
 
-    // Reemplazar el detalle de pacientes: desactivar los anteriores de este caso, cargar los nuevos
-    const pacientesTabla = await leerTabla('TablaPacientes', true);
-    for(const pAnterior of pacientesTabla.filter(p=>String(p.caso_id)===String(casoPrevio.caso_id) && p.activo)){
-      await actualizarFilaPorId('TablaPacientes', 'paciente_row_id', pAnterior.paciente_row_id, {activo:false});
+    // Reemplazar el detalle de pacientes: desactivar los anteriores de este
+    // caso (ya los tenemos en memoria de la única lectura de arriba) y
+    // encolar los nuevos para insertarlos todos juntos al final.
+    for(const pAnterior of (pacientesPreviosPorCaso[casoPrevio.caso_id]||[])){
+      pacientesDesactivarBatch.push({filaConIndice: pAnterior});
     }
     const pacientesNuevos = pacientesPorIdCaso[f.id_caso] || [];
-    for(const p of pacientesNuevos){
-      await agregarFila('TablaPacientes', {
-        paciente_row_id: uid(), caso_id: casoPrevio.caso_id, numero_pedido: p.numero_pedido||'',
-        fecha_pedido: p.fecha_pedido?p.fecha_pedido.toISOString():'',
-        fecha_a_facturar: p.fecha_a_facturar?p.fecha_a_facturar.toISOString():'',
-        fecha_entrega_promesa: p.fecha_entrega_promesa?p.fecha_entrega_promesa.toISOString():'',
-        unds_pedidas: p.unds_pedidas??'', unds_despachadas: p.unds_despachadas??'', pend_x_despachar: p.pend_x_despachar??'',
-        stock_erp: p.stock_erp??'', stock_seg: p.stock_seg??'', disponible: p.disponible??'', pventa: p.pventa??'', pesos: p.pesos??'',
-        laboratorio: p.laboratorio||'', agente: p.agente||'', nit_paciente: p.nit_paciente||'',
-        nombre_paciente: p.nombre_paciente||'', cuenta: p.cuenta||'', observaciones: p.observaciones||'', activo:true,
-      });
-      nPac++;
-    }
+    pacientesNuevos.forEach(p=>{ pacientesNuevosBatch.push(filaPaciente(casoPrevio.caso_id, p)); nPac++; });
     nUpd++;
   }
 
   for(const c of cerrados){
-    await actualizarFilaPorId('TablaCasos', 'caso_id', c.caso_id, {activo:false, fecha_cierre: ldbAhora()});
+    casosActualizarBatch.push({filaConIndice: c, cambios: {activo:false, fecha_cierre: ldbAhora()}});
     nCerr++;
   }
+
+  // ---- Se manda todo: primero las inserciones (no dependen de índices
+  // existentes), luego las actualizaciones por índice conocido. Los PATCH
+  // van en serie (Excel Online no maneja bien escrituras simultáneas sobre
+  // el mismo libro), pero como ya no vuelven a releer la tabla en cada
+  // paso, siguen siendo mucho más rápidos que antes. ----
+  if(casosNuevosBatch.length) await agregarFilas('TablaCasos', casosNuevosBatch);
+  if(pacientesNuevosBatch.length) await agregarFilas('TablaPacientes', pacientesNuevosBatch);
+  for(const {filaConIndice} of pacientesDesactivarBatch){
+    await patchFilaIndice('TablaPacientes', filaConIndice, {activo:false}, {sinInvalidar:true});
+  }
+  if(pacientesDesactivarBatch.length) invalidarCacheTablas(SP_ITEM_ID, 'TablaPacientes');
+  for(const {filaConIndice, cambios} of casosActualizarBatch){
+    await patchFilaIndice('TablaCasos', filaConIndice, cambios, {sinInvalidar:true});
+  }
+  if(casosActualizarBatch.length) invalidarCacheTablas(SP_ITEM_ID, 'TablaCasos');
 
   return {nuevos_insertados:nIns, casos_actualizados:nUpd, casos_cerrados:nCerr,
     filas_pacientes_cargadas:nPac, reasignados_de_modulo:reasignados, guardado:true};
@@ -3765,7 +3892,12 @@ function ocultarLogin(){
 
 function openInfoConexion(){
   const cuentaEl = document.getElementById('info-cuenta-actual');
-  if(cuentaEl) cuentaEl.textContent = msalCuenta ? msalCuenta.username : 'No has iniciado sesión';
+  if(cuentaEl){
+    const sesion = getSesion();
+    if(sesion && msalCuenta) cuentaEl.textContent = `${sesion.nombre} (${msalCuenta.username})`;
+    else if(msalCuenta) cuentaEl.textContent = msalCuenta.username;
+    else cuentaEl.textContent = 'No has iniciado sesión';
+  }
   document.getElementById('apiconfig-overlay').classList.add('active');
 }
 document.getElementById('login-conexion-btn').addEventListener('click', openInfoConexion);
