@@ -2768,13 +2768,14 @@ async function inicializarDB(){
 }
 
 async function iniciarSesionMicrosoft(){
-  const resultado = await msalApp.loginPopup({ scopes: ['User.Read', 'Files.ReadWrite'] });
-  msalCuenta = resultado.account;
-  await resolverArchivoExcel();
-  return resultado.account;
+  // Login por REDIRECCIÓN DE PÁGINA COMPLETA (no ventana emergente) --
+  // más robusto, sin límite de tiempo interno ni bloqueos de popup.
+  // Esto navega fuera de la página; el resto del login se completa
+  // en completarLoginTrasRedirect() cuando Microsoft nos devuelve aquí.
+  await msalApp.loginRedirect({ scopes: ['User.Read', 'Files.ReadWrite'] });
 }
 function cerrarSesionMicrosoft(){
-  if(msalApp && msalCuenta) msalApp.logoutPopup({ account: msalCuenta }).catch(()=>{});
+  if(msalApp && msalCuenta) msalApp.logoutRedirect({ account: msalCuenta }).catch(()=>{});
   msalCuenta = null;
 }
 
@@ -3788,7 +3789,21 @@ async function intentarLoginMicrosoft(){
   btn.disabled = true;
   btn.classList.add('is-loading');
   try{
-    await iniciarSesionMicrosoft();
+    await iniciarSesionMicrosoft(); // navega a Microsoft; el resto sigue al volver
+  } catch(err){
+    mostrarLogin(err.message || 'No se pudo iniciar sesión con Microsoft.');
+    btn.disabled = false;
+    btn.classList.remove('is-loading');
+  }
+}
+document.getElementById('login-entrar').addEventListener('click', intentarLoginMicrosoft);
+
+// Termina el login justo cuando Microsoft nos devuelve a la página
+// (tras iniciarSesionMicrosoft) -- mismos pasos que antes hacía el
+// botón, pero disparados automáticamente al volver de la redirección.
+async function completarLoginTrasRedirect(){
+  try{
+    await resolverArchivoExcel();
     const sesion = await ldbVerificarLoginMicrosoft();
     setSesion(sesion);
     ocultarLogin();
@@ -3798,15 +3813,13 @@ async function intentarLoginMicrosoft(){
     aplicarRestriccionAdminCargarDatos();
     toast(`Bienvenido, ${sesion.nombre}.`, true);
   } catch(err){
-    mostrarLogin(err.message || 'No se pudo iniciar sesión con Microsoft.');
-  } finally {
-    btn.disabled = false;
-    btn.classList.remove('is-loading');
+    mostrarLogin(err.message || 'No se pudo completar el inicio de sesión con Microsoft.');
   }
 }
-document.getElementById('login-entrar').addEventListener('click', intentarLoginMicrosoft);
 
-// Al cargar: si ya hay una sesión guardada Y la cuenta de Microsoft sigue activa, se aplica directo.
+// Al cargar: si ya hay sesión de app Y cuenta de Microsoft activa, se
+// aplica directo. Si solo hay cuenta de Microsoft (acabamos de volver
+// de loginRedirect) pero aún no hay sesión de app, se completa sola.
 async function iniciarAppLocal(){
   await inicializarDB();
   actualizarEstadoConexion();
@@ -3822,20 +3835,13 @@ async function iniciarAppLocal(){
     recomputeHome();
     cargarNotificaciones();
     aplicarRestriccionAdminCargarDatos();
+  } else if(msalCuenta){
+    await completarLoginTrasRedirect();
   } else {
     mostrarLogin();
   }
 }
-// Si esta página se abrió como la VENTANA EMERGENTE del login de
-// Microsoft (no la pestaña principal), no hay que inicializar toda la
-// app ahí -- solo dejar que MSAL complete el proceso y cierre la
-// ventana sola. Sin esto, la app se vuelve a arrancar DENTRO del
-// popup y MSAL lo bloquea (error "block_nested_popups").
-if(window.opener && window.opener !== window){
-  document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#57616F;">Completando el inicio de sesión…</div>';
-} else {
-  iniciarAppLocal();
-}
+iniciarAppLocal();
 
 
 /* ============================================================
