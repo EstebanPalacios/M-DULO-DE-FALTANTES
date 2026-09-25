@@ -657,7 +657,12 @@ License: MIT
               <div class="field"><label>Módulo</label><select id="notas-modulo-nueva">
                 <option value="CNG">CNG</option><option value="Abastecimiento">Abastecimiento</option><option value="Aliados">Aliados</option>
               </select></div>
-              <div class="field" style="flex:1;min-width:220px;"><label>Texto de la nota nueva</label><input type="text" id="notas-texto-nueva" maxlength="300" placeholder="Ej. Se contactó al laboratorio, en espera de respuesta"></div>
+              <div class="field" style="flex:1;min-width:220px;">
+                <label>Texto de la nota nueva</label>
+                <input type="text" id="notas-texto-nueva" maxlength="60" placeholder="Ej. Contactado con el laboratorio">
+                <div style="font-size:10.5px;color:var(--muted);margin-top:3px;">Máximo 60 caracteres — corta y estándar, para poder tabular patrones más adelante. Para detalles largos, se usa el campo de comentario libre al aplicar la nota.</div>
+                <div id="notas-texto-contador" style="font-size:10.5px;color:var(--muted);text-align:right;">0/60</div>
+              </div>
               <button class="btn-primary" id="notas-agregar">Agregar nota</button>
             </div>
             <div id="notas-tabla"></div>
@@ -801,6 +806,10 @@ License: MIT
               <div class="panel-head"><div><h2>Distribución por módulo</h2></div></div>
               <div id="ind-modulo"></div>
             </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><h2>Qué hay detrás de "Sin novedad clara"</h2><div class="desc">De esos casos (no Agotados con fecha, no Descontinuados, no Invima), qué nota predefinida se usó al gestionarlos por última vez -- solo notas estándar del catálogo, nunca comentarios libres</div></div></div>
+            <div id="ind-notas-sinclara"></div>
           </div>
           <div class="grid-2col">
             <div class="panel">
@@ -1678,12 +1687,11 @@ document.addEventListener('click', async (e)=>{
   _marcarTransferidoVistoEnMemoria(casoIds, false);
   _rerenderVistasConTransferido();
 
-  // 2) De verdad, en segundo plano.
+  // 2) De verdad, en segundo plano. Esto NO agrega ninguna nota a la
+  // bitácora -- marcar como visto el badge de transferido no es gestión,
+  // solo un acuse de revisión (ver comentario en ldbMarcarTransferidoVisto).
   try{
-    await apiPost('bitacora/lote?debug=true', {
-      caso_ids: casoIds, modulo, nota_predefinida_id: null,
-      nota_libre: 'Transferencia revisada y gestionada.', usuario_id: getSesion().usuario_id,
-    });
+    await apiPost('casos/marcar-transferido-visto?debug=true', { caso_ids: casoIds });
     invalidarCacheDatos(); // la próxima vez que se visite cada módulo se refresca de verdad, por si acaso
   } catch(err){
     _marcarTransferidoVistoEnMemoria(casoIds, true);
@@ -2420,7 +2428,7 @@ document.getElementById('notas-agregar').addEventListener('click', async ()=>{
   const modulo = document.getElementById('notas-modulo-nueva').value;
   const texto = document.getElementById('notas-texto-nueva').value.trim();
   if(!texto){ toast('Escribe el texto de la nota.'); return; }
-  if(texto.length > 300){ toast('El texto no puede superar 300 caracteres.'); return; }
+  if(texto.length > 60){ toast('El texto no puede superar 60 caracteres -- déjala corta y estándar.'); return; }
   const btn = document.getElementById('notas-agregar'); btn.disabled = true;
   try{
     await apiPost('admin/notas', {modulo, texto, orden: 0});
@@ -2429,6 +2437,12 @@ document.getElementById('notas-agregar').addEventListener('click', async ()=>{
     refreshNotasAdmin();
   } catch(err){ toast(err.message || 'No se pudo agregar la nota.'); }
   finally { btn.disabled = false; }
+});
+document.getElementById('notas-texto-nueva').addEventListener('input', (e)=>{
+  const n = e.target.value.length;
+  const contador = document.getElementById('notas-texto-contador');
+  contador.textContent = `${n}/60`;
+  contador.style.color = n>60 ? 'var(--red)' : 'var(--muted)';
 });
 
 /* ---------- Usuarios (admin) ---------- */
@@ -2659,6 +2673,19 @@ function renderIndicadoresModulo(porModulo){
   </div>`;
   activarDonut(holder);
 }
+function renderIndicadoresNotasSinClara(notas, totalSinClara, conNotaEstandar){
+  const holder = document.getElementById('ind-notas-sinclara');
+  if(!totalSinClara){ holder.innerHTML = '<div class="empty">Ningún caso cayó en "Sin novedad clara" en este periodo — buena señal.</div>'; return; }
+  const sinDato = totalSinClara - conNotaEstandar;
+  const resumen = `<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px;">
+    ${conNotaEstandar} de ${totalSinClara} caso(s) tienen una nota predefinida como última gestión
+    ${sinDato>0 ? ` · ${sinDato} sin nota estándar registrada todavía (sin gestionar, o solo con comentario libre)` : ''}
+  </div>`;
+  if(!notas.length){ holder.innerHTML = resumen + '<div class="empty">Ninguno de estos casos tiene todavía una nota predefinida como última gestión.</div>'; return; }
+  const maximo = Math.max(...notas.map(n=>n.total));
+  holder.innerHTML = resumen + `<div class="chart-bars chart-bars--ranked">${notas.map(n=>barraHtml(n.nota, n.total, maximo)).join('')}</div>`;
+  animarBarras(holder);
+}
 function claseSeveridad(n, umbralAlto, umbralCritico){
   return n>=umbralCritico ? 'sku-badge-critical' : (n>=umbralAlto ? 'sku-badge-high' : 'sku-badge-mid');
 }
@@ -2785,6 +2812,7 @@ async function refreshIndicadores(){
   renderIndicadoresTendencia(d.tendencia_diaria);
   renderIndicadoresTipo(d.por_tipo_novedad);
   renderIndicadoresModulo(d.por_modulo);
+  renderIndicadoresNotasSinClara(d.notas_sin_novedad_clara, d.sin_novedad_clara_total, d.sin_novedad_clara_con_nota_estandar);
   renderIndicadoresSkus(d.skus_recurrentes);
   renderIndicadoresCuentas(d.top_cuentas);
   renderIndicadoresTransferencias(d.transferencias_flujo);
@@ -4169,6 +4197,21 @@ async function ldbAgregarBitacoraLote(casoIds, modulo, notaPredefinidaId, notaLi
   }
   return {ok:true, casos_afectados: idsUnicos.length};
 }
+/* ---------- Marcar como visto el badge "Transferido" -- OJO: esto NO es
+   una nota de gestión, es solo un acuse de que alguien revisó que el caso
+   llegó por transferencia. No se escribe nada en la bitácora del caso (no
+   debe verse como si se hubiera gestionado nada); solo se toca la fecha
+   que ya usa el cálculo del badge para saber si hay una revisión más
+   reciente que la última transferencia. ---------- */
+async function ldbMarcarTransferidoVisto(casoIds){
+  if(!casoIds || !casoIds.length) throw new Error('No se enviaron casos.');
+  const idsUnicos = [...new Set(casoIds.map(String))];
+  const ahora = ldbAhora();
+  for(const casoId of idsUnicos){
+    await actualizarFilaPorId('TablaCasos', 'caso_id', casoId, {ultima_bitacora_fecha: ahora});
+  }
+  return {ok:true, casos_afectados: idsUnicos.length};
+}
 async function ldbNotasPredefinidas(modulo){
   const notas = await leerTabla('TablaNotas');
   return notas.filter(n=>n.modulo===modulo && n.activo).sort((a,b)=>a.orden-b.orden)
@@ -4408,6 +4451,29 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
     if(!c.activo && c.fecha_cierre) porTipoMap[claveTipo]._dias.push(ldbDiasEntre(c.fecha_creacion,c.fecha_cierre));
   });
   const porTipoNovedad = Object.values(porTipoMap).map(t=>({tipo_novedad:t.tipo_novedad,total:t.total,dias_promedio:t._dias.length?t._dias.reduce((a,b)=>a+b,0)/t._dias.length:null}));
+  // "Sin novedad clara" no explica nada por sí solo -- para encontrar
+  // patrones reales detrás de esos casos, se cuenta qué NOTA PREDEFINIDA
+  // fue la última que se usó al gestionarlos. Solo notas ESTÁNDAR del
+  // catálogo (nota_predefinida_id) -- un caso cuya última gestión fue
+  // solo un comentario libre no entra aquí, porque el texto libre es
+  // demasiado variado para tabular un patrón.
+  const notasCatalogo = await leerTabla('TablaNotas');
+  const notaTextoPorId = {};
+  notasCatalogo.forEach(n=>{ notaTextoPorId[n.nota_predef_id] = n.texto; });
+  const notasSinNovedadMap = {};
+  let sinNovedadClaraConNotaEstandar = 0;
+  casos.forEach(c=>{
+    const esSinNovedadClara = c.tipo_novedad==='Agotado' && !c.fecha_novedad;
+    if(!esSinNovedadClara) return;
+    if(!c.tiene_bitacora || !c.ultima_bitacora_nota_predefinida_id) return;
+    const texto = notaTextoPorId[c.ultima_bitacora_nota_predefinida_id];
+    if(!texto) return;
+    notasSinNovedadMap[texto] = (notasSinNovedadMap[texto]||0)+1;
+    sinNovedadClaraConNotaEstandar++;
+  });
+  const notasSinNovedadClara = Object.entries(notasSinNovedadMap)
+    .map(([nota,total])=>({nota,total})).sort((a,b)=>b.total-a.total).slice(0,10);
+  const sinNovedadClaraTotal = casos.filter(c=>c.tipo_novedad==='Agotado' && !c.fecha_novedad).length;
   const porModuloMap = {};
   casos.forEach(c=>{ porModuloMap[c.modulo_actual]=(porModuloMap[c.modulo_actual]||0)+1; });
   const porModulo = Object.entries(porModuloMap).map(([modulo_actual,total])=>({modulo_actual,total}));
@@ -4461,6 +4527,8 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
     top_cuentas:topCuentas, tendencia_diaria:tendenciaDiaria, pacientes_afectados:pacientesAfectados.size,
     transferencias_flujo:transferenciasFlujo, skus_mas_pacientes:skusMasPacientes,
     pacientes_mas_afectados:pacientesMasAfectados, carga_por_modulo:cargaPorModulo,
+    notas_sin_novedad_clara:notasSinNovedadClara, sin_novedad_clara_total:sinNovedadClaraTotal,
+    sin_novedad_clara_con_nota_estandar:sinNovedadClaraConNotaEstandar,
     comparacion_periodo_anterior:comparacionPeriodoAnterior};
 }
 
@@ -4529,7 +4597,11 @@ async function ldbCrearNotaPredefinida(modulo, texto, orden){
   if(!['CNG','Abastecimiento','Aliados'].includes(modulo)) throw new Error(`Módulo inválido: ${modulo}`);
   texto = (texto||'').trim();
   if(!texto) throw new Error('El texto de la nota es obligatorio.');
-  if(texto.length > 300) throw new Error('El texto no puede superar 300 caracteres.');
+  // Corto y estándar a propósito -- estas notas se usan para tabular
+  // patrones de gestión más adelante, así que no deben convertirse en un
+  // campo de texto libre (para eso ya existe el comentario adicional al
+  // aplicar la nota).
+  if(texto.length > 60) throw new Error('El texto no puede superar 60 caracteres.');
   const notaPredefId = uid();
   const nueva = {nota_predef_id: notaPredefId, modulo, texto, orden: Number(orden)||0, activo: true};
   await agregarFila('TablaNotas', nueva);
@@ -4540,7 +4612,7 @@ async function ldbActualizarNotaPredefinida(notaPredefId, texto, orden, activo){
   if(texto !== undefined){
     texto = (texto||'').trim();
     if(!texto) throw new Error('El texto de la nota no puede quedar vacío.');
-    if(texto.length > 300) throw new Error('El texto no puede superar 300 caracteres.');
+    if(texto.length > 60) throw new Error('El texto no puede superar 60 caracteres.');
     cambios.texto = texto;
   }
   if(orden !== undefined) cambios.orden = Number(orden)||0;
@@ -4629,6 +4701,7 @@ async function apiPost(path, body){
   if(base==='admin/notas') return await ldbCrearNotaPredefinida(body.modulo, body.texto, body.orden);
   if(base==='admin/usuarios') return await ldbCrearUsuario(body.nombre, body.email, body.rol, body.modulo_asignado);
   if(base==='bitacora/lote') return await ldbAgregarBitacoraLote(body.caso_ids, body.modulo, body.nota_predefinida_id, body.nota_libre, body.usuario_id);
+  if(base==='casos/marcar-transferido-visto') return await ldbMarcarTransferidoVisto(body.caso_ids);
   let m;
   if((m = base.match(/^casos\/([^/]+)\/bitacora$/))) return await ldbAgregarBitacora(m[1], body.modulo, body.nota_predefinida_id, body.nota_libre, body.usuario_id, body.paciente_row_id, false);
   if((m = base.match(/^casos\/([^/]+)\/transferir$/))) return await ldbTransferirCaso(m[1], body.modulo_destino, body.nota, body.usuario_id);
