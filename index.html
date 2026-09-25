@@ -222,6 +222,8 @@
   .sku-list{display:flex;flex-direction:column;gap:6px;counter-reset:skurank;}
   .sku-row{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:12px;background:var(--card);border:1px solid var(--border);font-size:13px;transition:box-shadow .15s ease,transform .15s ease;}
   .sku-row:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px);}
+  .sku-row-click{cursor:pointer;}
+  .sku-row-click:focus-visible{outline:2px solid var(--navy);outline-offset:2px;}
   .sku-row::before{
     counter-increment:skurank; content:counter(skurank);
     width:24px;height:24px;border-radius:50%;background:var(--gray-bg);color:var(--muted);
@@ -981,6 +983,16 @@ License: MIT
   </div>
 </div>
 
+<!-- ===== Detalle de SKU reabierto (clic en el Top 10 de Indicadores) ===== -->
+<div class="overlay" id="skudetalle-overlay">
+  <div class="modal vr-modal">
+    <div id="skudetalle-body"><div class="empty">Cargando...</div></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="skudetalle-cerrar">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== Datos y respaldo ===== -->
 <div class="overlay" id="apiconfig-overlay">
   <div class="modal">
@@ -1434,13 +1446,13 @@ function initTable(containerId, columns, rawRowsFn, opts){
 /* ============================================================
    MULTISELECT DESPLEGABLE
    ============================================================ */
-function multiSelect(containerId, label, options, selectedSet, onChange){
+function multiSelect(containerId, label, options, selectedSet, onChange, labelFn){
   const el = document.getElementById(containerId);
   function render(){
     el.innerHTML = `<div class="ms">
       <button type="button" class="ms-btn">${label}${selectedSet.size? ' ('+selectedSet.size+')':''} <span>&#9662;</span></button>
       <div class="ms-panel">
-        ${options.map(o=>`<label class="ms-opt"><input type="checkbox" value="${esc(o)}" ${selectedSet.has(o)?'checked':''}> ${esc(o)}</label>`).join('')}
+        ${options.map(o=>`<label class="ms-opt"><input type="checkbox" value="${esc(o)}" ${selectedSet.has(o)?'checked':''}> ${labelFn?labelFn(o):esc(o)}</label>`).join('')}
         <div class="ms-actions"><button type="button" class="ms-clear">Limpiar selección</button></div>
       </div>
     </div>`;
@@ -1514,6 +1526,40 @@ document.querySelectorAll('.cat').forEach(el=> el.addEventListener('click', ()=>
    ============================================================ */
 const MODULO_ICONS = {CNG:'layers', Abastecimiento:'package', Aliados:'handshake'};
 const MODULE_LABELS = {CNG:'CNG', Abastecimiento:'Abastecimiento', Aliados:'Desarrollo de aliados'};
+// Nombre corto de cada bodega, para que la gente se guíe por algo además
+// del número -- Esteban dio esta lista; una bodega que no esté aquí
+// simplemente se muestra solo con su número, sin romper nada.
+const BODEGA_NOMBRES = {'1':'CL Medellín', '19':'CL UdeA', '21':'EPM', '5':'CL Bogotá', '6':'CL Cali', '7':'Barranquilla'};
+function bodegaLabel(id){
+  const nombre = BODEGA_NOMBRES[String(id)];
+  return nombre ? `${esc(id)} - ${esc(nombre)}` : esc(id);
+}
+// La columna "Cuenta/Convenio" del Excel de origen a veces trae VARIOS
+// convenios juntos en una sola celda, separados por coma (un caso puede
+// afectar a más de un convenio a la vez) -- eso se conserva tal cual en el
+// detalle/tabla, porque ahí es útil ver cuántos convenios toca un
+// registro. Pero en el SEGMENTADOR (el filtro de arriba) cada convenio
+// necesita aparecer como su propia opción, para poder filtrar por uno
+// solo sin tener que adivinar con cuáles combinaciones aparece.
+// De paso homologa variantes conocidas del mismo convenio (siglas,
+// mayúsculas/minúsculas) para que no salgan como entradas duplicadas.
+const CONVENIO_ALIASES = {
+  'UDEA': 'UNIVERSIDAD DE ANTIOQUIA',
+  'U DE A': 'UNIVERSIDAD DE ANTIOQUIA',
+  'U. DE A.': 'UNIVERSIDAD DE ANTIOQUIA',
+  'EPM': 'EMPRESAS PUBLICAS DE MEDELLIN E.S.P (DISPENSACION)',
+  'EMPRESAS PUBLICAS DE MEDELLIN': 'EMPRESAS PUBLICAS DE MEDELLIN E.S.P (DISPENSACION)',
+};
+function normalizarConvenio(nombre){
+  const limpio = (nombre||'').trim().replace(/\s+/g,' ');
+  if(!limpio) return '';
+  const clave = limpio.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,''); // sin tildes, para que "Público"/"PUBLICO" empaten
+  return CONVENIO_ALIASES[clave] || limpio;
+}
+function conveniosDe(cuenta){
+  if(!cuenta) return [];
+  return [...new Set(cuenta.split(',').map(normalizarConvenio).filter(Boolean))];
+}
 // Un mismo par de colores por módulo, reutilizado tanto en la barra de
 // "Distribución por módulo" como en el borde/ícono de su tarjeta de entrada,
 // para que ambos se lean como la misma información vista dos veces.
@@ -2620,9 +2666,60 @@ function renderIndicadoresSkus(skus){
   const holder = document.getElementById('ind-skus');
   if(!skus.length){ holder.innerHTML = '<div class="empty">Ningún código se repitió más de una vez en este periodo — buena señal.</div>'; return; }
   holder.innerHTML = `<div class="sku-list">${skus.map(s=>`
-    <div class="sku-row"><div><strong>${esc(s.codigo)}</strong> &middot; ${esc(s.producto)}</div><span class="sku-badge ${claseSeveridad(s.veces,3,5)}">${s.veces}&times; reabierto</span></div>
+    <div class="sku-row sku-row-click" data-codigo="${esc(s.codigo)}" title="Ver detalle de este código" tabindex="0">
+      <div><strong>${esc(s.codigo)}</strong> &middot; ${esc(s.producto)}</div><span class="sku-badge ${claseSeveridad(s.veces,3,5)}">${s.veces}&times; reabierto</span>
+    </div>
   `).join('')}</div>`;
+  holder.querySelectorAll('.sku-row-click').forEach(row=>{
+    row.addEventListener('click', ()=> abrirDetalleSku(row.dataset.codigo));
+    row.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); abrirDetalleSku(row.dataset.codigo); } });
+  });
 }
+async function abrirDetalleSku(codigo){
+  document.getElementById('skudetalle-overlay').classList.add('active');
+  const body = document.getElementById('skudetalle-body');
+  body.innerHTML = '<div class="empty">Cargando detalle del código...</div>';
+  try{
+    const desde = document.getElementById('ind-desde').value;
+    const hasta = document.getElementById('ind-hasta').value;
+    const qs = [`codigo=${encodeURIComponent(codigo)}`];
+    if(desde) qs.push('fecha_desde='+desde);
+    if(hasta) qs.push('fecha_hasta='+hasta);
+    const d = await apiGet('indicadores/sku?'+qs.join('&'));
+    body.innerHTML = `
+      <div class="vr-head">
+        <div><div class="vr-codigo">${esc(d.codigo)}</div><div style="font-size:13px;color:var(--muted);">${esc(d.producto)}</div></div>
+      </div>
+      <div class="vr-sub">Se reabrió ${d.total_casos} vez(es) en el periodo consultado</div>
+      <div class="vr-grid">
+        <div class="vr-item"><div class="k">Casos abiertos ahora</div><div class="v">${d.casos_abiertos} de ${d.total_casos}</div></div>
+        <div class="vr-item"><div class="k">Pacientes distintos afectados</div><div class="v">${d.pacientes_distintos}</div></div>
+      </div>
+      <div class="vr-section-title">Casos con este código (${d.casos.length})</div>
+      ${d.casos.length ? d.casos.map(c=>`
+        <div class="vr-pac-row sku-detalle-caso" data-caso="${esc(c.caso_id)}" data-modulo="${esc(c.modulo_actual)}" style="cursor:pointer;flex-wrap:wrap;gap:4px 12px;">
+          <span><strong>${esc(MODULE_LABELS[c.modulo_actual]||c.modulo_actual)}</strong> · ${c.activo?'Abierto':'Cerrado'} · ${c.dias_abierto} días
+            · ${c.responsable?esc(c.responsable):'Sin responsable asignado'}</span>
+          <span>
+            ${c.tiene_bitacora ? '<span class="sku-badge sku-badge-mid" style="background:#DCFCE7;color:#166534;">Con gestión hoy</span>' : '<span class="sku-badge sku-badge-high">Sin gestión hoy</span>'}
+            &middot; ${c.pacientes_afectados} paciente(s)
+          </span>
+        </div>
+      `).join('') : '<div class="empty">Sin casos para este código en el periodo.</div>'}
+    `;
+    body.querySelectorAll('.sku-detalle-caso').forEach(row=>{
+      row.addEventListener('click', ()=>{
+        document.getElementById('skudetalle-overlay').classList.remove('active');
+        abrirVistaRapida(row.dataset.caso, row.dataset.modulo);
+      });
+    });
+  } catch(err){
+    body.innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}</div>`;
+  }
+}
+document.getElementById('skudetalle-cerrar').addEventListener('click', ()=>{
+  document.getElementById('skudetalle-overlay').classList.remove('active');
+});
 function renderIndicadoresCuentas(cuentas){
   const holder = document.getElementById('ind-cuentas');
   if(!cuentas.length){ holder.innerHTML = '<div class="empty">Sin datos.</div>'; return; }
@@ -2737,8 +2834,8 @@ document.getElementById('cng-limpiar').addEventListener('click', ()=>{
 });
 function renderCngFiltrosBodegaConvenio(){
   const bodegas = [...new Set(casosCNG.map(r=>String(r.bodega_id)))].sort();
-  const convenios = [...new Set(casosCNG.map(r=>r.cuenta).filter(Boolean))].sort();
-  multiSelect('cng-ms-bodega', 'Bodega', bodegas, cngBodegaSet, renderCng);
+  const convenios = [...new Set(casosCNG.flatMap(r=>conveniosDe(r.cuenta)))].sort();
+  multiSelect('cng-ms-bodega', 'Bodega', bodegas, cngBodegaSet, renderCng, bodegaLabel);
   multiSelect('cng-ms-convenio', 'Convenio', convenios, cngConvenioSet, renderCng);
 }
 function cngFilteredRows(){
@@ -2746,7 +2843,7 @@ function cngFilteredRows(){
     if(cngUrgFilter==='Si' && !r.prioritario) return false;
     if(cngUrgFilter==='No' && r.prioritario) return false;
     if(cngBodegaSet.size && !cngBodegaSet.has(String(r.bodega_id))) return false;
-    if(cngConvenioSet.size && !cngConvenioSet.has(r.cuenta)) return false;
+    if(cngConvenioSet.size && !conveniosDe(r.cuenta).some(c=>cngConvenioSet.has(c))) return false;
     return true;
   });
 }
@@ -2808,7 +2905,7 @@ function cngPacienteRow(caso, p){
     <td><input type="checkbox" class="cng-p-select" data-caso="${esc(caso.caso_id)}" data-pid="${esc(p.paciente_row_id)}"></td>
     <td>${fechaCorta(p.fecha_a_facturar)||'—'}</td>
     <td>${p.numero_pedido?esc(p.numero_pedido):'—'}</td>
-    <td><span class="badge b-descontinuado">Bodega ${esc(caso.bodega_id)}</span></td>
+    <td><span class="badge b-descontinuado">Bodega ${bodegaLabel(caso.bodega_id)}</span></td>
     <td>${siNoBadge(!!caso.prioritario)}</td>
     <td>${p.cuenta?esc(p.cuenta):(caso.cuenta?esc(caso.cuenta):'—')}</td>
     <td>${esc(caso.codigo)}</td>
@@ -3049,7 +3146,7 @@ const AB_COLUMNS = [
   {key:'_select', label:'', filter:false, sort:false},
   {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido, [r.caso_id], 'Abastecimiento')},
   {key:'producto', label:'Producto', filter:true, sort:false, width:190},
-  {key:'bodega_id', label:'Bodega', filter:true, sort:true, format:r=>`Bodega ${esc(r.bodega_id)}`, filterVal:r=>'bodega '+r.bodega_id},
+  {key:'bodega_id', label:'Bodega', filter:true, sort:true, format:r=>`Bodega ${bodegaLabel(r.bodega_id)}`, filterVal:r=>'bodega '+r.bodega_id+' '+(BODEGA_NOMBRES[String(r.bodega_id)]||'')},
   {key:'cuenta', label:'Cuenta', filter:true, sort:true, format:r=>r.cuenta?esc(r.cuenta):'—'},
   {key:'prioritario', label:'Prioritario', filter:true, sort:true, format:r=>siNoBadge(!!r.prioritario), filterVal:r=>r.prioritario?'si':'no'},
   {key:'dias_abierto', label:'Días', filter:true, sort:true, format:r=>diasBadge(r.dias_abierto), filterVal:r=>String(r.dias_abierto??'')},
@@ -3167,8 +3264,8 @@ document.getElementById('al-limpiar').addEventListener('click', ()=>{
 });
 function renderAlFiltrosBodegaConvenio(){
   const bodegas = [...new Set(casosAliados.map(r=>String(r.bodega_id)))].sort();
-  const convenios = [...new Set(casosAliados.map(r=>r.cuenta).filter(Boolean))].sort();
-  multiSelect('al-ms-bodega', 'Bodega', bodegas, alBodegaSet, renderAliados);
+  const convenios = [...new Set(casosAliados.flatMap(r=>conveniosDe(r.cuenta)))].sort();
+  multiSelect('al-ms-bodega', 'Bodega', bodegas, alBodegaSet, renderAliados, bodegaLabel);
   multiSelect('al-ms-convenio', 'Convenio', convenios, alConvenioSet, renderAliados);
 }
 function alFilteredRows(){
@@ -3176,7 +3273,7 @@ function alFilteredRows(){
     if(alUrgFilter==='Si' && !r.prioritario) return false;
     if(alUrgFilter==='No' && r.prioritario) return false;
     if(alBodegaSet.size && !alBodegaSet.has(String(r.bodega_id))) return false;
-    if(alConvenioSet.size && !alConvenioSet.has(r.cuenta)) return false;
+    if(alConvenioSet.size && !conveniosDe(r.cuenta).some(c=>alConvenioSet.has(c))) return false;
     return true;
   });
 }
@@ -3214,7 +3311,7 @@ const AL_MOL_COLUMNS = [
 function alBodegaRow(caso){
   return `<tr>
     <td><input type="checkbox" class="al-b-select" data-caso="${esc(caso.caso_id)}"></td>
-    <td><span class="badge b-descontinuado">Bodega ${esc(caso.bodega_id)}</span></td>
+    <td><span class="badge b-descontinuado">Bodega ${bodegaLabel(caso.bodega_id)}</span></td>
     <td>${esc(caso.codigo)}</td>
     <td>${caso.producto?esc(caso.producto):'—'}</td>
     <td>${caso.laboratorio?esc(caso.laboratorio):'<span style="color:var(--muted);">—</span>'}</td>
@@ -3384,7 +3481,7 @@ async function abrirVistaRapida(casoId, modulo){
       </div>
       <div class="vr-sub">${esc(MODULE_LABELS[modulo]||modulo)} · resumen de lo gestionado hasta ahora</div>
       <div class="vr-grid">
-        <div class="vr-item"><div class="k">Bodega</div><div class="v">Bodega ${esc(caso.bodega_id)}</div></div>
+        <div class="vr-item"><div class="k">Bodega</div><div class="v">Bodega ${bodegaLabel(caso.bodega_id)}</div></div>
         <div class="v-item"><div class="k">Cuenta / convenio</div><div class="v">${caso.cuenta?esc(caso.cuenta):'—'}</div></div>
         <div class="vr-item"><div class="k">Días abierto</div><div class="v">${caso.dias_abierto} días</div></div>
         <div class="vr-item"><div class="k">Prioridad</div><div class="v">${esc(caso.prioridad)}${caso.prioritario?' · Urgente':''}</div></div>
@@ -4084,7 +4181,10 @@ async function ldbTransferirCaso(casoId, moduloDestino, nota, usuarioId){
   // (evita 2 lecturas + 2 escrituras extra de la tabla por transferencia,
   // que era una de las causas de la lentitud y de que el cambio de módulo
   // quedara "a medias" si Microsoft cortaba la solicitud en un paso intermedio).
-  await ldbAgregarBitacora(casoId, moduloDestino, null, `Transferido desde ${moduloOrigen}: ${nota}`, usuarioId, null, true, {omitirActualizarCaso:true});
+  // El texto ya no repite "Transferido desde" -- la tarjeta de la nota
+  // misma dice "Transferencia" en su etiqueta, así que solo hace falta el
+  // nombre del módulo de origen seguido de la nota, sin ser redundante.
+  await ldbAgregarBitacora(casoId, moduloDestino, null, `${MODULE_LABELS[moduloOrigen]||moduloOrigen}: ${nota}`, usuarioId, null, true, {omitirActualizarCaso:true});
   // Con varias personas trabajando el mismo caso al tiempo, es posible que
   // OTRA persona ya haya transferido este mismo caso mientras se escribían
   // los pasos de arriba (la nota, la fila de transferencia). Si se usara el
@@ -4338,6 +4438,37 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
     comparacion_periodo_anterior:comparacionPeriodoAnterior};
 }
 
+/* ---------- Detalle de un SKU (clic en "Códigos con más reaperturas" de
+   Indicadores) -- responde qué está pasando con ese código: quién lo está
+   gestionando, si tiene bitácora al día, cuántos pacientes toca y en qué
+   casos concretos aparece dentro del periodo consultado. ---------- */
+async function ldbDetalleSku(codigo, fechaDesde, fechaHasta){
+  if(!codigo) throw new Error('Falta el código a consultar.');
+  const todos = await ldbTodosCasosEnriquecidos();
+  const enRango = c=>{
+    if(fechaDesde && f10(c.fecha_creacion) < fechaDesde) return false;
+    if(fechaHasta && f10(c.fecha_creacion) > fechaHasta) return false;
+    return true;
+  };
+  const casos = todos.filter(c=> String(c.codigo)===String(codigo) && enRango(c));
+  casos.sort((a,b)=> (b.activo - a.activo) || b.dias_abierto - a.dias_abierto);
+  const pacientesUnicos = new Set();
+  casos.forEach(c=>c.pacientes.forEach(p=>{ if(p.nit_paciente) pacientesUnicos.add(p.nit_paciente); }));
+  return {
+    codigo, producto: casos[0] ? casos[0].producto : '',
+    total_casos: casos.length, casos_abiertos: casos.filter(c=>c.activo).length,
+    pacientes_distintos: pacientesUnicos.size,
+    casos: casos.map(c=>({
+      caso_id: c.caso_id, modulo_actual: c.modulo_actual, activo: c.activo,
+      dias_abierto: c.dias_abierto, responsable: c.responsable||'', bodega_id: c.bodega_id,
+      cuenta: c.cuenta||'', tiene_bitacora: c.tiene_bitacora, tipo_novedad: c.tipo_novedad,
+      pacientes_afectados: c.pacientes.length,
+      ultima_bitacora_fecha: c.ultima_bitacora_fecha||null,
+      ultima_bitacora_nota_libre: c.ultima_bitacora_nota_libre||'',
+    })),
+  };
+}
+
 /* ---------- ADMINISTRACIÓN — Usuarios y Notas predefinidas ----------
    Estas 6 funciones ya estaban conectadas desde la interfaz (Cargar datos
    > Notas / Usuarios, solo visible para admin) pero nunca se habían
@@ -4449,6 +4580,7 @@ async function apiGet(path){
   if(base==='admin/notas') return ldbListarNotasAdmin();
   if(base==='admin/usuarios') return ldbListarUsuarios();
   if(base==='indicadores') return ldbIndicadores(qs.fecha_desde, qs.fecha_hasta);
+  if(base==='indicadores/sku') return ldbDetalleSku(qs.codigo||'', qs.fecha_desde, qs.fecha_hasta);
   if(base==='exportar-casos') return ldbExportarCasos(qs.fecha_desde, qs.fecha_hasta);
   if(base==='casos'){
     const activo = qs.activo==null ? true : (qs.activo==='todos' ? null : qs.activo==='true');
@@ -4861,6 +4993,18 @@ async function ejecutarIngestaLocal(files, guardar){
     // decisión humana y NO se reasigna de módulo solo — se queda donde una
     // persona lo puso, incluso si la novedad sigue apareciendo día a día.
     if(!tieneTransferenciaPrevia){ cambios.modulo_actual = f.modulo_sugerido; reasignados++; }
+    // El caso sigue trayendo la misma novedad un día más: se apaga el
+    // indicador verde ("ya tiene gestión") para que vuelva a pedir revisión
+    // hoy. Esto NO borra ni una sola nota de TablaBitacora -- el historial
+    // completo de gestión queda intacto y se sigue viendo en el detalle del
+    // caso, solo se resetea el semáforo que dice "ya lo revisé".
+    if(casoPrevio.tiene_bitacora){
+      cambios.tiene_bitacora = false;
+      cambios.ultima_bitacora_fecha = '';
+      cambios.ultima_bitacora_nota_predefinida_id = '';
+      cambios.ultima_bitacora_nota_libre = '';
+      cambios.ultima_bitacora_usuario_id = '';
+    }
     casosActualizarBatch.push({filaConIndice: casoPrevio, cambios});
 
     // Reemplazar el detalle de pacientes: desactivar los anteriores de este
