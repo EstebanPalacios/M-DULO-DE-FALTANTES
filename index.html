@@ -560,11 +560,6 @@ License: MIT
           <div class="kpi futuras"><div class="lbl">Mayores a hoy</div><div class="val" id="h-futuras">0</div><div class="trend">programadas</div></div>
           <div class="kpi" style="border-left-color:var(--muted);"><div class="lbl">Sin fecha de novedad</div><div class="val" id="h-sinfecha">0</div><div class="trend">principalmente en Abastecimiento</div></div>
         </div>
-        <div class="panel">
-          <h2>Distribución por módulo</h2>
-          <div class="desc">Proporción de casos activos gestionados en cada módulo — el color de cada barra es el mismo de su tarjeta de entrada abajo</div>
-          <div id="h-modulo-bars"></div>
-        </div>
         <div class="cats-intro">
           <h2>Registra tus novedades aquí</h2>
           <div class="desc">Cada área ingresa por su tarjeta para reportar y gestionar sus propias novedades — haz clic para entrar al módulo</div>
@@ -1801,19 +1796,11 @@ async function recomputeHome(forzar){
   document.getElementById('h-c-ABAST').textContent = r.por_modulo.Abastecimiento || 0;
   document.getElementById('h-c-ALIADOS').textContent = r.por_modulo.Aliados || 0;
 
-  // Distribución por módulo -- mismo color por módulo que las tarjetas de
-  // abajo (icono + borde), para que quede claro que la barra y la tarjeta
-  // de entrada son la misma cosa vista de dos formas, no dos datos distintos.
-  const totalModulo = (r.por_modulo.CNG||0)+(r.por_modulo.Abastecimiento||0)+(r.por_modulo.Aliados||0);
-  const maxModulo = Math.max(1, r.por_modulo.CNG||0, r.por_modulo.Abastecimiento||0, r.por_modulo.Aliados||0);
-  const holderMod = document.getElementById('h-modulo-bars');
-  holderMod.innerHTML = `<div class="chart-bars">${['CNG','Abastecimiento','Aliados'].map(m=>{
-    const v = r.por_modulo[m]||0;
-    return barraHtml(MODULE_LABELS[m], v, maxModulo, MODULO_COLORES[m]);
-  }).join('')}</div>`;
-  animarBarras(holderMod);
   // Porcentaje de participación en cada tarjeta de módulo, para que la
-  // tarjeta por sí sola diga "acá entra el X% de todo lo que hay activo".
+  // tarjeta por sí sola diga "acá entra el X% de todo lo que hay activo"
+  // (esto reemplaza al panel aparte de "Distribución por módulo" que había
+  // antes -- mostraba la misma información dos veces).
+  const totalModulo = (r.por_modulo.CNG||0)+(r.por_modulo.Abastecimiento||0)+(r.por_modulo.Aliados||0);
   ['CNG','Abastecimiento','Aliados'].forEach(m=>{
     const v = r.por_modulo[m]||0;
     const pct = totalModulo>0 ? Math.round(v/totalModulo*100) : 0;
@@ -4717,8 +4704,15 @@ async function revalidarSesionEnSegundoPlano(sesionCacheada){
     const fresca = await ldbVerificarLoginMicrosoft();
     const cambioRol = fresca.rol !== sesionCacheada.rol || fresca.modulo_asignado !== sesionCacheada.modulo_asignado;
     setSesion(fresca);
+    // Se vuelve a pintar el nombre/rol en la esquina superior SIEMPRE, no
+    // solo cuando cambia el rol -- si alguien corrigió el nombre en la
+    // hoja "Usuarios" (por ejemplo, un dato mal cargado), el encabezado se
+    // había quedado con el nombre viejo del localStorage hasta que la
+    // persona cerraba sesión manualmente. aplicarRestriccionesDeRol es
+    // barata (solo toca el DOM), así que no hay problema en llamarla
+    // aunque nada haya cambiado.
+    aplicarRestriccionesDeRol(fresca);
     if(cambioRol){
-      aplicarRestriccionesDeRol(fresca);
       toast('Tu perfil de acceso cambió -- se actualizaron tus permisos.', true);
     }
   } catch(err){
