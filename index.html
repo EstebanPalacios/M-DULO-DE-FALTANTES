@@ -363,7 +363,8 @@
   .login-hero-dot{width:8px;height:8px;border-radius:50%;background:#5eead4;flex:0 0 auto;box-shadow:0 0 0 4px rgba(94,234,212,.18);animation:loginPulse 2.2s ease-in-out infinite;}
   @keyframes loginPulse{0%,100%{opacity:1;}50%{opacity:.4;}}
   .transferido-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:5px;box-shadow:0 0 0 3px rgba(13,148,136,.18);animation:loginPulse 1.8s ease-in-out infinite;vertical-align:middle;}
-  .transferido-tag{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--green);margin-left:6px;}
+  .transferido-tag{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--green);margin-left:6px;cursor:pointer;}
+  .transferido-tag:hover{text-decoration:underline;}
   .bit-status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;flex:0 0 auto;}
   .bit-status-dot.si{background:var(--green);}
   .bit-status-dot.no{background:transparent;border:1.5px solid var(--muted);}
@@ -411,8 +412,17 @@
   .modal select,.modal textarea,.modal input{width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;}
   .modal textarea{min-height:80px;resize:vertical;}
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
-  .bitacora-item{border-bottom:1px solid var(--border);padding:9px 0;font-size:12.5px;}
-  .bitacora-item .meta{color:var(--muted);font-size:10.5px;margin-top:2px;}
+  #bitacora-list,#bulknote-list{max-height:220px;overflow-y:auto;margin-bottom:4px;}
+  .bitacora-item{display:flex;gap:9px;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:12.5px;margin-bottom:7px;}
+  .bitacora-item:last-child{margin-bottom:0;}
+  .bitacora-item .bit-marker{flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:4px;background:var(--muted);}
+  .bitacora-item.es-transferencia{border-left:3px solid var(--green);background:rgba(13,148,136,.05);}
+  .bitacora-item.es-transferencia .bit-marker{background:var(--green);box-shadow:0 0 0 3px rgba(13,148,136,.18);animation:loginPulse 1.8s ease-in-out infinite;}
+  .bitacora-item .bit-body{flex:1 1 auto;min-width:0;}
+  .bitacora-item .bit-texto{line-height:1.4;}
+  .bitacora-item .meta{color:var(--muted);font-size:10.5px;margin-top:3px;display:flex;align-items:center;gap:6px;}
+  .bitacora-item .meta .tipo-tag{font-weight:700;text-transform:uppercase;letter-spacing:.3px;font-size:9px;}
+  .bitacora-item.es-transferencia .meta .tipo-tag{color:var(--green);}
   optgroup{font-weight:700;}
 
   /* toast */
@@ -558,7 +568,6 @@ License: MIT
           <div class="kpi vencidas"><div class="lbl">Vencidas</div><div class="val" id="h-vencidas">0</div><div class="trend" id="h-vencidas-pct">0% del total</div></div>
           <div class="kpi hoy"><div class="lbl">Hoy</div><div class="val" id="h-hoy">0</div><div class="trend">requieren atención inmediata</div></div>
           <div class="kpi futuras"><div class="lbl">Mayores a hoy</div><div class="val" id="h-futuras">0</div><div class="trend">programadas</div></div>
-          <div class="kpi" style="border-left-color:var(--muted);"><div class="lbl">Sin fecha de novedad</div><div class="val" id="h-sinfecha">0</div><div class="trend">principalmente en Abastecimiento</div></div>
         </div>
         <div class="cats-intro">
           <h2>Registra tus novedades aquí</h2>
@@ -567,21 +576,21 @@ License: MIT
         <div class="cats">
           <div class="cat" data-goto="cng" data-mod="CNG" tabindex="0" role="button">
             <div class="cat-icon" data-mod-icon="CNG"></div>
-            <h3>Faltantes con novedad (CNG)</h3>
+            <h3>CNG</h3>
             <span class="count" id="h-c-CNG">0</span>
             <div class="cat-pct" id="h-pct-CNG">0% del total activo</div>
             <div class="sub">Entrar al módulo <span class="arrow">&#8594;</span></div>
           </div>
           <div class="cat" data-goto="abast" data-mod="Abastecimiento" tabindex="0" role="button">
             <div class="cat-icon" data-mod-icon="Abastecimiento"></div>
-            <h3>Faltantes sin novedad (Abastecimiento)</h3>
+            <h3>Abastecimiento</h3>
             <span class="count" id="h-c-ABAST">0</span>
             <div class="cat-pct" id="h-pct-Abastecimiento">0% del total activo</div>
             <div class="sub">Entrar al módulo <span class="arrow">&#8594;</span></div>
           </div>
           <div class="cat" data-goto="aliados" data-mod="Aliados" tabindex="0" role="button">
             <div class="cat-icon" data-mod-icon="Aliados"></div>
-            <h3>Gestión de alternativas (D. Aliados)</h3>
+            <h3>Desarrollo de aliados</h3>
             <span class="count" id="h-c-ALIADOS">0</span>
             <div class="cat-pct" id="h-pct-Aliados">0% del total activo</div>
             <div class="sub">Entrar al módulo <span class="arrow">&#8594;</span></div>
@@ -832,7 +841,7 @@ License: MIT
         </div>
         <div class="panel">
           <div class="panel-head">
-            <div><h2>Faltantes con novedad (CNG)</h2><div class="desc">Expande cada molécula para ver el detalle por paciente en todas las bodegas</div></div>
+            <div><h2>CNG</h2><div class="desc">Expande cada molécula para ver el detalle por paciente en todas las bodegas</div></div>
           </div>
           <div id="cng-table"></div>
         </div>
@@ -854,7 +863,7 @@ License: MIT
         </div>
         <div class="panel">
           <div class="panel-head">
-            <div><h2>Faltantes sin novedad (Abastecimiento)</h2><div class="desc">Todos los campos visibles en la misma tabla, sin expandir</div></div>
+            <div><h2>Abastecimiento</h2><div class="desc">Todos los campos visibles en la misma tabla, sin expandir</div></div>
             <div class="bulkbar">
               <span id="ab-usuario-actual"></span>
               <button class="btn-ghost" id="ab-limpiar">Limpiar filtros</button>
@@ -882,7 +891,7 @@ License: MIT
           <button class="btn-ghost" id="al-limpiar">Limpiar filtros</button>
         </div>
         <div class="panel">
-          <div class="panel-head"><div><h2>Gestión de alternativas (Desarrollo de aliados)</h2><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div></div>
+          <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div></div>
           <div id="al-table"></div>
         </div>
       </div>
@@ -929,6 +938,7 @@ License: MIT
   <div class="modal">
     <h3>Agregar nota a varios casos</h3>
     <div class="sub" id="bulknote-sub"></div>
+    <div id="bulknote-list"></div>
     <label>Selecciona una nota</label>
     <select id="bulknote-nota-select"></select>
     <label style="font-size:11.5px;color:var(--muted);font-weight:600;margin-top:10px;">¿Algo más que agregar? (opcional)</label>
@@ -1142,6 +1152,28 @@ let _redimensionandoColumna = false;
 /* Agrega el mismo "arrastrar para redimensionar" a tablas HTML simples que
    no usan initTable (detalle de pacientes en CNG, detalle por bodega en
    Aliados, etc). Se llama después de insertar el HTML en el DOM. */
+/* Las tablas de detalle expandido (pacientes por molécula en CNG, bodegas
+   por molécula en Aliados) son HTML estático armado por fila -- a
+   diferencia de las tablas principales (initTable), no tenían NINGÚN
+   filtro. Se agrega un único cuadro de texto que filtra por cualquier
+   columna a la vez (no una por columna, para no complicar un marcado que
+   no pasa por el motor genérico de tablas), buscando contra el texto
+   visible de cada fila. */
+function wireFiltroTablaDetalle(contenedor){
+  const input = contenedor.querySelector('.detalle-filtro');
+  if(!input) return;
+  let debounceFiltro = null;
+  input.addEventListener('input', ()=>{
+    clearTimeout(debounceFiltro);
+    debounceFiltro = setTimeout(()=>{
+      const q = input.value.trim().toLowerCase();
+      contenedor.querySelectorAll('table.excel-like tbody tr').forEach(tr=>{
+        const texto = tr.textContent.toLowerCase();
+        tr.style.display = (!q || texto.includes(q)) ? '' : 'none';
+      });
+    }, 200);
+  });
+}
 function hacerTablaRedimensionable(contenedor){
   contenedor.querySelectorAll('table.excel-like th').forEach(th=>{
     if(th.querySelector('.col-resizer')) return; // ya tiene, no duplicar
@@ -1412,7 +1444,7 @@ function showView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.goto===name));
-  const titles = {home:'Panel general',resumen:'Resumen de Gestión',cng:'Módulo 1 · Faltantes con novedad (CNG)',abast:'Módulo 2 · Faltantes sin novedad (Abastecimiento)',aliados:'Módulo 3 · Gestión de alternativas (Desarrollo de aliados)',cargar:'Cargar Datos'};
+  const titles = {home:'Panel general',resumen:'Resumen de Gestión',cng:'Módulo 1 · CNG',abast:'Módulo 2 · Abastecimiento',aliados:'Módulo 3 · Desarrollo de aliados',cargar:'Cargar Datos'};
   document.getElementById('page-title').textContent = titles[name];
   document.getElementById('crumbs').textContent = name==='home' ? 'Gestión de faltantes' : 'Gestión de faltantes / '+titles[name];
   if(name==='home') recomputeHome();
@@ -1496,14 +1528,45 @@ function skeletonTabla(filas){
   filas = filas || 5;
   return `<div style="padding:2px 0;">${Array.from({length:filas}).map(()=>`<div class="skeleton skeleton-row"></div>`).join('')}</div>`;
 }
-function transferidoTag(){
-  return `<span class="transferido-tag" title="Este caso llegó por transferencia desde otro módulo"><span class="transferido-dot"></span>Transferido</span>`;
+function transferidoTag(casoIds, modulo){
+  // Clicable -- data-transferido-casos/-modulo quedan en el propio tag para
+  // que el listener delegado (ver marcarTransferidoVisto) sepa qué caso(s)
+  // marcar como "ya lo vi" sin tener que rearmar el contexto de la fila.
+  const idsAttr = (casoIds && casoIds.length) ? esc(casoIds.join(',')) : '';
+  return `<span class="transferido-tag" data-transferido-casos="${idsAttr}" data-transferido-modulo="${esc(modulo||'')}" title="Este caso llegó por transferencia desde otro módulo -- clic para marcarlo como visto">
+    <span class="transferido-dot"></span>Transferido
+  </span>`;
 }
-function codigoConTransferido(codigo, transferido){
+function codigoConTransferido(codigo, transferido, casoIds, modulo){
   // "codigo" viene directo del Excel de informe que alguien más subió --
   // se escapa siempre, aunque casi nunca traiga nada raro.
-  return transferido ? `${esc(codigo)} ${transferidoTag()}` : esc(codigo);
+  return transferido ? `${esc(codigo)} ${transferidoTag(casoIds, modulo)}` : esc(codigo);
 }
+// Clic sobre la etiqueta "Transferido" = "ya lo vi": deja una nota manual
+// liviana (usa el mismo mecanismo de bitácora de siempre, así que si el
+// caso se vuelve a transferir más adelante la etiqueta reaparece sola,
+// exactamente como pidió Esteban) en vez de agregar una columna nueva al
+// Excel solo para este estado.
+document.addEventListener('click', async (e)=>{
+  const tag = e.target.closest('.transferido-tag');
+  if(!tag) return;
+  e.stopPropagation();
+  const casoIds = (tag.dataset.transferidoCasos||'').split(',').filter(Boolean);
+  const modulo = tag.dataset.transferidoModulo;
+  if(!casoIds.length || !modulo) return;
+  tag.style.opacity = '.45'; tag.style.pointerEvents = 'none';
+  try{
+    await apiPost('bitacora/lote?debug=true', {
+      caso_ids: casoIds, modulo, nota_predefinida_id: null,
+      nota_libre: 'Transferencia revisada y gestionada.', usuario_id: getSesion().usuario_id,
+    });
+    toast('Marcado como visto.', true);
+    refrescarModuloActivoSinSkeleton();
+  } catch(err){
+    toast(err.message || 'No se pudo marcar como visto.');
+    tag.style.opacity=''; tag.style.pointerEvents='';
+  }
+});
 function botonBitacora(claseExtra, dataAttrs, tieneBitacora, etiqueta){
   const clase = tieneBitacora ? 'btn-ghost tiene-bit' : 'btn-ghost';
   const dotClase = tieneBitacora ? 'si' : 'no';
@@ -1559,13 +1622,27 @@ async function openBitacora(casoId, modulo, pacienteId, titulo, onSave){
     document.getElementById('bitacora-list').innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}</div>`;
   }
 }
-function renderBitacoraList(entradas){
-  const list = document.getElementById('bitacora-list');
+function renderBitacoraList(entradas, containerId){
+  const list = document.getElementById(containerId || 'bitacora-list');
+  if(!list) return;
   if(!entradas || !entradas.length){ list.innerHTML = '<div class="empty">Sin entradas registradas todavía.</div>'; return; }
-  list.innerHTML = entradas.map(b=>`<div class="bitacora-item">
-      <div>${b.nota_predefinida_texto ? `<strong>${esc(b.nota_predefinida_texto)}</strong>` : ''}${b.nota_predefinida_texto && b.nota_libre ? ' — ' : ''}${esc(b.nota_libre)}</div>
-      <div class="meta">${fechaCorta(b.fecha)} &middot; ${esc(b.autor)}</div>
-    </div>`).join('');
+  // Las notas que llegaron por una transferencia (es_automatica) se marcan
+  // con el mismo puntito verde parpadeante del indicador "Transferido", para
+  // separarlas de un vistazo de las que son seguimiento/gestión real --
+  // sin ese contraste todas se veían igual de "planas" en la lista.
+  list.innerHTML = entradas.map(b=>{
+    const esTransferencia = !!b.es_automatica;
+    return `<div class="bitacora-item ${esTransferencia?'es-transferencia':''}">
+      <span class="bit-marker"></span>
+      <div class="bit-body">
+        <div class="meta">
+          ${esTransferencia?'<span class="tipo-tag">Transferencia</span>':'<span class="tipo-tag" style="color:var(--muted);">Seguimiento</span>'}
+          &middot; ${fechaCorta(b.fecha)} &middot; ${esc(b.autor)}
+        </div>
+        <div class="bit-texto">${b.nota_predefinida_texto ? `<strong>${esc(b.nota_predefinida_texto)}</strong>` : ''}${b.nota_predefinida_texto && b.nota_libre ? ' — ' : ''}${esc(b.nota_libre||'')}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 document.getElementById('bitacora-cancel').addEventListener('click', ()=>document.getElementById('bitacora-overlay').classList.remove('active'));
 document.getElementById('bitacora-save').addEventListener('click', async ()=>{
@@ -1583,9 +1660,8 @@ document.getElementById('bitacora-save').addEventListener('click', async ()=>{
     document.getElementById('bitacora-nota-select').value = '';
     document.getElementById('bitacora-nota-libre').value = '';
     toast('Nota agregada a la bitácora.', true);
-    invalidarCacheDatos();
     if(bitacoraOnSave) bitacoraOnSave();
-    refreshAll();
+    refrescarModuloActivoSinSkeleton();
   } catch(err){
     toast(err.message || 'No se pudo guardar la nota.');
   } finally { btn.disabled = false; }
@@ -1593,12 +1669,27 @@ document.getElementById('bitacora-save').addEventListener('click', async ()=>{
 
 /* ---------- Nota masiva (varios casos a la vez) ---------- */
 let bulkNoteCasoIds = [], bulkNoteModulo = null;
+async function cargarHistorialBulkNote(){
+  // Junta la bitácora de TODOS los casos del lote (encabezado/molécula o
+  // selección múltiple) en una sola lista ordenada por fecha -- así este
+  // botón deja de ser "solo para escribir" y también sirve para revisar lo
+  // que ya se gestionó, igual que el botón de un caso puntual.
+  document.getElementById('bulknote-list').innerHTML = '<div class="empty">Cargando historial...</div>';
+  try{
+    const casos = await Promise.all(bulkNoteCasoIds.map(id=>apiGet(`casos/${id}`).catch(()=>null)));
+    const entradas = casos.filter(Boolean).flatMap(c=>c.bitacora||[]).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+    renderBitacoraList(entradas, 'bulknote-list');
+  } catch(err){
+    document.getElementById('bulknote-list').innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}</div>`;
+  }
+}
 async function openBulkNote(casoIds, modulo, subTitle){
   bulkNoteCasoIds = casoIds; bulkNoteModulo = modulo;
   document.getElementById('bulknote-sub').textContent = subTitle || `${casoIds.length} caso(s) seleccionados`;
   document.getElementById('bulknote-nota-select').innerHTML = '<option value="">Cargando notas...</option>';
   document.getElementById('bulknote-nota-libre').value = '';
   document.getElementById('bulknote-overlay').classList.add('active');
+  cargarHistorialBulkNote();
   try{
     const notas = await apiGet(`bitacora-notas/${modulo}`);
     document.getElementById('bulknote-nota-select').innerHTML =
@@ -1617,9 +1708,11 @@ document.getElementById('bulknote-save').addEventListener('click', async ()=>{
       caso_ids: bulkNoteCasoIds, modulo: bulkNoteModulo, nota_predefinida_id: notaPredefId, nota_libre: notaLibre,
       usuario_id: getSesion().usuario_id,
     });
-    document.getElementById('bulknote-overlay').classList.remove('active');
+    document.getElementById('bulknote-nota-select').value = '';
+    document.getElementById('bulknote-nota-libre').value = '';
+    await cargarHistorialBulkNote();
     toast(`Nota agregada a ${r.casos_afectados} caso(s).`, true);
-    refreshAll();
+    refrescarModuloActivoSinSkeleton();
   } catch(err){ toast(err.message || 'No se pudo guardar la nota masiva.'); }
   finally { btn.disabled = false; }
 });
@@ -1765,6 +1858,21 @@ function refreshAll(){
   if(document.getElementById('view-abast').classList.contains('active')) refreshAbast();
   if(document.getElementById('view-aliados').classList.contains('active')) refreshAliados();
 }
+// Igual que refreshAll(), pero sin el parpadeo de "Cargando..." -- se usa
+// después de guardar una nota de bitácora (individual o masiva/desde el
+// encabezado), donde la tabla ya tiene datos buenos en pantalla y no hace
+// falta que desaparezcan mientras se trae la confirmación de SharePoint
+// por debajo. Antes, cualquier nota de bitácora se sentía "como si la
+// página se recargara" porque de fondo se disparaba el mismo refresco
+// pesado (con skeleton) que usa una carga inicial de módulo.
+function refrescarModuloActivoSinSkeleton(){
+  invalidarCacheDatos();
+  recomputeHome();
+  if(document.getElementById('view-resumen').classList.contains('active')) refreshResumen(true, true);
+  if(document.getElementById('view-cng').classList.contains('active')) refreshCng(true);
+  if(document.getElementById('view-abast').classList.contains('active')) refreshAbast(true);
+  if(document.getElementById('view-aliados').classList.contains('active')) refreshAliados(true);
+}
 
 /* ============================================================
    HOME (Panel general) — vía /api/resumen
@@ -1780,17 +1888,20 @@ async function recomputeHome(forzar){
   const r = await obtenerResumenConCache(forzar);
   if(!r) return;
   const hoyStr = new Date().toISOString().slice(0,10);
-  const conFecha = r.casos.filter(c=>c.fecha_novedad);
-  const sinFecha = r.casos.filter(c=>!c.fecha_novedad);
-  const vencidas = conFecha.filter(c=>c.fecha_novedad.slice(0,10) < hoyStr).length;
-  const hoy = conFecha.filter(c=>c.fecha_novedad.slice(0,10) === hoyStr).length;
-  const futuras = conFecha.filter(c=>c.fecha_novedad.slice(0,10) > hoyStr).length;
+  // Vencidas/Hoy/Mayores a hoy se calculan sobre "fecha_entrega_antigua"
+  // (la fecha comprometida de entrega que trae el informe de origen), no
+  // sobre la fecha de la novedad -- son cosas distintas: la novedad dice
+  // QUÉ pasó con el pedido, la fecha de entrega antigua dice CUÁNDO se
+  // había prometido entregarlo.
+  const conFecha = r.casos.filter(c=>c.fecha_entrega_antigua);
+  const vencidas = conFecha.filter(c=>c.fecha_entrega_antigua.slice(0,10) < hoyStr).length;
+  const hoy = conFecha.filter(c=>c.fecha_entrega_antigua.slice(0,10) === hoyStr).length;
+  const futuras = conFecha.filter(c=>c.fecha_entrega_antigua.slice(0,10) > hoyStr).length;
   document.getElementById('h-total').textContent = r.total_activos;
   document.getElementById('h-vencidas').textContent = vencidas;
   document.getElementById('h-vencidas-pct').textContent = (r.total_activos? Math.round(vencidas/r.total_activos*100):0)+'% del total';
   document.getElementById('h-hoy').textContent = hoy;
   document.getElementById('h-futuras').textContent = futuras;
-  document.getElementById('h-sinfecha').textContent = sinFecha.length;
 
   document.getElementById('h-c-CNG').textContent = r.por_modulo.CNG || 0;
   document.getElementById('h-c-ABAST').textContent = r.por_modulo.Abastecimiento || 0;
@@ -1815,11 +1926,11 @@ async function recomputeHome(forzar){
   const invima = r.casos.filter(c=>c.tipo_novedad==='Invima').length;
   const transferidos = r.casos.filter(c=>c.transferido).length;
   const tipoData = [
-    ['Agotado (con fecha)', agotadoConFecha, ['#F87171','#B91C1C']],
+    ['Agotado', agotadoConFecha, ['#F87171','#B91C1C']],
     ['Sin novedad clara', sinNovedadClara, ['#B8BCC4','#6B7280']],
     ['Descontinuado', descontinuados, ['#5B7FC7','#1E3A66']],
-    ['Novedad Invima', invima, ['#FBBF24','#B45309']],
-    ['Transferidos alguna vez', transferidos, ['#34D399','#047857']],
+    ['Invima', invima, ['#FBBF24','#B45309']],
+    ['Transferidos', transferidos, ['#34D399','#047857']],
   ];
   const maxTipo = Math.max(1, ...tipoData.map(t=>t[1]));
   const holderTipo = document.getElementById('h-tipo-bars');
@@ -1866,7 +1977,7 @@ function rsFilteredRows(){
 }
 const RS_COLUMNS = [
   {key:'modulo_actual', label:'Módulo', filter:true, sort:true, format:r=>`<span class="badge b-descontinuado">${MODULE_LABELS[r.modulo_actual]}</span>`},
-  {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido)},
+  {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido, [r.caso_id], r.modulo_actual)},
   {key:'producto', label:'Descripción', filter:true, sort:false, width:220},
   {key:'responsable', label:'Responsable', filter:true, sort:true, width:170, format:r=>r.responsable?esc(r.responsable):'<span style="color:var(--muted)">Sin asignar</span>'},
   {key:'prioridad', label:'Prioridad', filter:true, sort:true, format:r=>prioridadBadge(r.prioridad), sortVal:r=>({Alta:3,Media:2,Baja:1})[r.prioridad]},
@@ -1898,8 +2009,12 @@ function renderResumenTable(){
     keyFn: r=>String(r.caso_id),
     rowActions: r=>`<button class="btn-orange rs-ver" data-modulo="${esc(r.modulo_actual)}" data-id="${esc(r.caso_id)}" data-codigo="${esc(r.codigo)}">${icon('arrow',13)} Ver caso</button>`,
     wireActions: (tbody)=>{
+      // "Ver caso" en el Resumen siempre abre el resumen rápido (notas,
+      // bitácora, gestión, tiempos) en vez de navegar al módulo -- así
+      // nunca se manda a alguien a una pantalla a la que quizás no tiene
+      // acceso por su rol.
       tbody.querySelectorAll('.rs-ver').forEach(b=>b.addEventListener('click', ()=>{
-        goToCase(b.dataset.modulo, b.dataset.id, b.dataset.codigo);
+        abrirVistaRapida(b.dataset.id, b.dataset.modulo);
       }));
     },
   });
@@ -1989,9 +2104,9 @@ function renderResumenKpis(){
   document.getElementById('rs-viejos').textContent = resumenCache.mas_de_15_dias;
   document.getElementById('rs-transf').textContent = resumenCache.transferencias_hoy;
 }
-async function refreshResumen(forzar){
+async function refreshResumen(forzar, silencioso){
   const necesitaRed = forzar || !cacheVigente('resumen') || !resumenCache;
-  if(necesitaRed && !document.getElementById('rs-hist-toggle').checked){
+  if(necesitaRed && !silencioso && !document.getElementById('rs-hist-toggle').checked){
     document.getElementById('rs-table').innerHTML = skeletonTabla();
   }
   const r = await obtenerResumenConCache(forzar);
@@ -2546,9 +2661,11 @@ function cngFilteredRows(){
 function updateCngKpis(rows){
   const hoyStr = new Date().toISOString().slice(0,10);
   document.getElementById('cng-total').textContent = rows.length;
-  document.getElementById('cng-vencidas').textContent = rows.filter(r=>r.fecha_novedad && r.fecha_novedad.slice(0,10) < hoyStr).length;
-  document.getElementById('cng-hoy').textContent = rows.filter(r=>r.fecha_novedad && r.fecha_novedad.slice(0,10) === hoyStr).length;
-  document.getElementById('cng-futuras').textContent = rows.filter(r=>r.fecha_novedad && r.fecha_novedad.slice(0,10) > hoyStr).length;
+  // Vencidas/Hoy/Programadas se calculan sobre "fecha_entrega_antigua"
+  // (la fecha comprometida de entrega), no sobre la fecha de la novedad.
+  document.getElementById('cng-vencidas').textContent = rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) < hoyStr).length;
+  document.getElementById('cng-hoy').textContent = rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) === hoyStr).length;
+  document.getElementById('cng-futuras').textContent = rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) > hoyStr).length;
 }
 /* Agrupa los casos (uno por Bodega+Código) en filas de molécula (por Código,
    sumando entre todas las bodegas donde aparece) — igual a la hoja de ejemplo. */
@@ -2563,17 +2680,26 @@ function agruparCngPorMolecula(rows){
       };
     }
     const g = grupos[r.codigo];
-    g.cantidad_pedidos += (r.num_pedidos || 0);
+    // La cantidad de gestión de la molécula es el número de REGISTROS
+    // (relación código-bodega, un caso por bodega) agrupados bajo ese
+    // código -- no la suma del campo num_pedidos de cada fila, que es un
+    // conteo interno de líneas de pedido dentro de una sola bodega y puede
+    // ser mayor a 1 aun cuando solo hay un registro/caso real. Sumarlo
+    // inflaba el número cuando un caso con num_pedidos>1 se agrupaba junto
+    // a otros -- se corrige contando los casos en sí (g.casos.length, al
+    // final de esta función), y este acumulador queda solo para mostrar el
+    // acumulado real de pedidos si se necesita en otro lado.
     g.cantidad_pendientes += (r.pendiente || 0);
     if(r.transferido) g.transferido = true;
     if(r.tiene_bitacora) g.tiene_bitacora = true;
     g.casos.push(r);
   });
+  Object.values(grupos).forEach(g=>{ g.cantidad_pedidos = g.casos.length; });
   return Object.values(grupos);
 }
 const CNG_MOL_COLUMNS = [
   {key:'_expand', label:'', filter:false, sort:false},
-  {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido)},
+  {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido, r.casos.filter(c=>c.transferido).map(c=>c.caso_id), 'CNG')},
   {key:'generico', label:'Principio activo', filter:true, sort:true},
   {key:'producto', label:'Descripción', filter:true, sort:false, width:220},
   {key:'cantidad_pedidos', label:'Cantidad pedidos', filter:true, sort:true},
@@ -2615,6 +2741,7 @@ function cngDetailHtml(molecula){
   return `<div class="bulkbar" style="margin:0 0 10px;">
       <span id="cng-p-sel-count-${esc(molecula.codigo)}">0 seleccionados</span>
       <button class="btn-ghost cng-p-bulk-note" data-mol="${esc(molecula.codigo)}">${icon('book',13)} Agregar nota a seleccionados</button>
+      <input type="text" class="detalle-filtro" placeholder="Filtrar por cualquier columna (bodega, convenio, cédula, nombre...)" style="margin-left:auto;min-width:260px;">
     </div>
     <div class="table-scroll"><table class="excel-like"><thead><tr>
       <th><input type="checkbox" class="cng-p-select-all" title="Seleccionar todos"></th><th>Fecha</th><th>#Pedido</th><th>Bodega</th><th>Urgencia</th><th>Convenio</th><th>Código</th><th>Principio activo</th><th>Descripción</th>
@@ -2629,14 +2756,43 @@ function renderCng(){
   const rows = cngFilteredRows();
   updateCngKpis(rows);
   const molecs = agruparCngPorMolecula(rows);
+  const cngMoleculasAnteriores = cngMoleculasPorCodigo;
   cngMoleculasPorCodigo = {};
-  molecs.forEach(m=>cngMoleculasPorCodigo[m.codigo]=m);
+  molecs.forEach(m=>{
+    const previa = cngMoleculasAnteriores[m.codigo];
+    if(previa && previa._pacientesCombinados){
+      // Se conserva el detalle de pacientes ya cargado para esta molécula
+      // (evita el parpadeo de "Cargando pacientes..." al refrescar tras
+      // guardar una nota de bitácora), pero se refresca el CASO dentro de
+      // cada combinación caso+paciente con los datos nuevos -- así el
+      // ícono "tiene bitácora" sí queda al día con la nota recién
+      // guardada, sin tener que volver a pedir todo el detalle a Graph.
+      const casoPorId = {};
+      m.casos.forEach(c=>casoPorId[c.caso_id]=c);
+      m._pacientesCombinados = previa._pacientesCombinados.map(({caso, p})=>{
+        const casoFresco = casoPorId[caso.caso_id];
+        return {caso: casoFresco ? {...caso, ...casoFresco} : caso, p};
+      });
+    }
+    cngMoleculasPorCodigo[m.codigo]=m;
+  });
   cngTableApi = initTable('cng-table', CNG_MOL_COLUMNS, ()=>molecs, {
     initialSort: {key:'cantidad_pendientes', dir:1},
     keyFn: m=>m.codigo,
     rowClass: m=> m.casos.some(c=>c._recienMovido) ? 'row-recien-movida' : '',
-    expandRenderer: m=>`<div class="nested" id="cng-mol-detail-${esc(m.codigo)}"><div class="empty">Cargando pacientes...</div></div>`,
-    onExpand: (codigo, isOpen)=>{ if(isOpen) cargarDetalleMoleculaCng(codigo); },
+    expandRenderer: m=> m._pacientesCombinados ? `<div class="nested" id="cng-mol-detail-${esc(m.codigo)}">${cngDetailHtml(m)}</div>` : `<div class="nested" id="cng-mol-detail-${esc(m.codigo)}"><div class="empty">Cargando pacientes...</div></div>`,
+    onExpand: (codigo, isOpen)=>{
+      if(!isOpen) return;
+      const molecula = cngMoleculasPorCodigo[codigo];
+      if(molecula && molecula._pacientesCombinados){
+        // Ya se pintó con datos conservados arriba -- solo falta conectar
+        // los eventos (checkboxes, botones) de ese detalle.
+        const detalle = document.getElementById('cng-mol-detail-'+esc(codigo));
+        if(detalle) wireCngPacienteDetalle(detalle, molecula);
+      } else {
+        cargarDetalleMoleculaCng(codigo);
+      }
+    },
     rowActions: m=>`
       ${botonBitacora('cng-mol-bit', `data-codigo="${esc(m.codigo)}"`, m.tiene_bitacora)}
       <button class="btn-orange cng-transfer" data-codigo="${esc(m.codigo)}">${icon('transfer',13)} Transferir novedad</button>
@@ -2673,6 +2829,7 @@ async function cargarDetalleMoleculaCng(codigo){
 function wireCngPacienteDetalle(detalle, molecula){
   const seleccionados = new Set();
   hacerTablaRedimensionable(detalle);
+  wireFiltroTablaDetalle(detalle);
   detalle.querySelectorAll('.cng-p-select').forEach(cb=>cb.addEventListener('change', ()=>{
     const key = cb.dataset.caso+':'+cb.dataset.pid;
     if(cb.checked) seleccionados.add(key); else seleccionados.delete(key);
@@ -2703,10 +2860,21 @@ function wireCngPacienteDetalle(detalle, molecula){
     openBulkNote(casoIds, 'CNG', `${seleccionados.size} paciente(s) seleccionados`);
   });
 }
-async function refreshCng(){
-  document.getElementById('cng-table').innerHTML = skeletonTabla();
+async function refreshCng(silencioso){
+  // "silencioso" evita el parpadeo de "Cargando..." (skeleton) que se
+  // sentía como si la página entera se recargara -- se usa después de
+  // guardar una nota de bitácora, donde la tabla ya tiene datos buenos en
+  // pantalla y solo hace falta traer los cambios frescos por debajo.
+  if(!silencioso){
+    document.getElementById('cng-table').innerHTML = skeletonTabla();
+    // Una carga "de verdad" (Consultar, cambiar de módulo, subir datos
+    // nuevos) sí debe traer el detalle de pacientes fresco -- solo el
+    // camino silencioso (después de una nota de bitácora) reutiliza el
+    // detalle ya cargado para no parpadear.
+    cngMoleculasPorCodigo = {};
+  }
   try{ casosCNG = await cargarModulo('CNG'); }
-  catch(err){ toast(err.message || 'No se pudo cargar CNG.'); casosCNG = []; }
+  catch(err){ toast(err.message || 'No se pudo cargar CNG.'); if(!silencioso) casosCNG = []; }
   renderCngFiltrosBodegaConvenio();
   renderCng();
   marcarCacheFresca('cng');
@@ -2737,12 +2905,12 @@ function updateAbastKpis(rows){
 }
 const AB_COLUMNS = [
   {key:'_select', label:'', filter:false, sort:false},
-  {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido)},
+  {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido, [r.caso_id], 'Abastecimiento')},
   {key:'producto', label:'Producto', filter:true, sort:false, width:190},
   {key:'bodega_id', label:'Bodega', filter:true, sort:true, format:r=>`Bodega ${esc(r.bodega_id)}`, filterVal:r=>'bodega '+r.bodega_id},
   {key:'cuenta', label:'Cuenta', filter:true, sort:true, format:r=>r.cuenta?esc(r.cuenta):'—'},
   {key:'prioritario', label:'Prioritario', filter:true, sort:true, format:r=>siNoBadge(!!r.prioritario), filterVal:r=>r.prioritario?'si':'no'},
-  {key:'dias_abierto', label:'Días', filter:false, sort:true, format:r=>diasBadge(r.dias_abierto)},
+  {key:'dias_abierto', label:'Días', filter:true, sort:true, format:r=>diasBadge(r.dias_abierto), filterVal:r=>String(r.dias_abierto??'')},
   {key:'pendiente', label:'Pendiente', filter:true, sort:true, format:r=>`<span class="${r.pendiente<0?'pend-neg':'pend-pos'}">${r.pendiente??'—'}</span>`},
   {key:'_actions', label:'Acciones', filter:false, sort:false},
   {key:'planeador', label:'Planeador', filter:true, sort:true, format:r=>r.planeador?esc(r.planeador):'—'},
@@ -2823,10 +2991,10 @@ document.getElementById('ab-exportar').addEventListener('click', ()=>{
   a.click();
   toast('Exportación generada ('+rows.length+' registros).', true);
 });
-async function refreshAbast(){
-  document.getElementById('ab-table').innerHTML = skeletonTabla();
+async function refreshAbast(silencioso){
+  if(!silencioso) document.getElementById('ab-table').innerHTML = skeletonTabla();
   try{ casosAbast = await cargarModulo('Abastecimiento'); }
-  catch(err){ toast(err.message || 'No se pudo cargar Abastecimiento.'); casosAbast = []; }
+  catch(err){ toast(err.message || 'No se pudo cargar Abastecimiento.'); if(!silencioso) casosAbast = []; }
   renderAbast();
   marcarCacheFresca('abast');
 }
@@ -2881,11 +3049,14 @@ function agruparAliadosPorMolecula(rows){
       };
     }
     const g = grupos[r.codigo];
-    g.cantidad_pedidos += (r.num_pedidos || 0);
+    // Mismo criterio que en CNG: la cantidad de gestión son los REGISTROS
+    // (relación código-bodega) agrupados bajo el código, no la suma del
+    // campo num_pedidos -- ver comentario en agruparCngPorMolecula.
     g.cantidad_pendientes += (r.pendiente || 0);
     if(r.tiene_bitacora) g.tiene_bitacora = true;
     g.casos.push(r);
   });
+  Object.values(grupos).forEach(g=>{ g.cantidad_pedidos = g.casos.length; });
   return Object.values(grupos);
 }
 const AL_MOL_COLUMNS = [
@@ -2927,6 +3098,7 @@ function alDetailHtml(molecula){
       <span id="al-b-sel-count-${esc(molecula.codigo)}">0 seleccionados</span>
       <button class="btn-ghost al-b-bulk-note" data-mol="${esc(molecula.codigo)}">${icon('book',13)} Agregar nota a todas</button>
       <button class="btn-orange al-b-bulk-tr" data-mol="${esc(molecula.codigo)}">${icon('transfer',13)} Transferir seleccionadas</button>
+      <input type="text" class="detalle-filtro" placeholder="Filtrar por cualquier columna" style="margin-left:auto;min-width:220px;">
     </div>
     <div class="table-scroll"><table class="excel-like"><thead><tr>
       <th><input type="checkbox" class="al-b-select-all" data-mol="${esc(molecula.codigo)}" title="Seleccionar todas"></th><th>Bodega</th><th>Código</th><th>Descripción</th><th>Proveedor</th><th>Cliente</th>
@@ -2979,6 +3151,7 @@ function renderAliados(){
         });
       }));
       hacerTablaRedimensionable(tbody);
+      tbody.querySelectorAll('.nested').forEach(nested=>wireFiltroTablaDetalle(nested));
       // seleccion masiva por molecula (nota / transferencia) dentro del detalle expandido
       tbody.querySelectorAll('.al-b-bulk-note, .al-b-bulk-tr').forEach(btn=>{
         btn.addEventListener('click', ()=>{
@@ -2993,10 +3166,10 @@ function renderAliados(){
     },
   });
 }
-async function refreshAliados(){
-  document.getElementById('al-table').innerHTML = skeletonTabla();
+async function refreshAliados(silencioso){
+  if(!silencioso) document.getElementById('al-table').innerHTML = skeletonTabla();
   try{ casosAliados = await cargarModulo('Aliados'); }
-  catch(err){ toast(err.message || 'No se pudo cargar D. Aliados.'); casosAliados = []; }
+  catch(err){ toast(err.message || 'No se pudo cargar D. Aliados.'); if(!silencioso) casosAliados = []; }
   renderAlFiltrosBodegaConvenio();
   renderAliados();
   marcarCacheFresca('aliados');
@@ -3046,7 +3219,7 @@ async function abrirVistaRapida(casoId, modulo){
         <div><div class="vr-codigo">${esc(caso.codigo)}</div><div style="font-size:13px;color:var(--muted);">${esc(caso.producto)}</div></div>
         ${novedadConFecha(caso)}
       </div>
-      <div class="vr-sub">${esc(MODULE_LABELS[modulo]||modulo)} · no tienes acceso directo a este módulo, pero aquí está lo relevante</div>
+      <div class="vr-sub">${esc(MODULE_LABELS[modulo]||modulo)} · resumen de lo gestionado hasta ahora</div>
       <div class="vr-grid">
         <div class="vr-item"><div class="k">Bodega</div><div class="v">Bodega ${esc(caso.bodega_id)}</div></div>
         <div class="v-item"><div class="k">Cuenta / convenio</div><div class="v">${caso.cuenta?esc(caso.cuenta):'—'}</div></div>
@@ -3055,11 +3228,12 @@ async function abrirVistaRapida(casoId, modulo){
         <div class="vr-item"><div class="k">Responsable</div><div class="v">${caso.responsable?esc(caso.responsable):'Sin asignar'}</div></div>
         <div class="vr-item"><div class="k">Código alternativa</div><div class="v">${caso.codigo_alternativa?esc(caso.codigo_alternativa):'Pendiente'}</div></div>
       </div>
-      <div class="vr-section-title">Última nota de gestión</div>
-      ${ultimaNota ? `<div class="vr-nota">${ultimaNota.nota_predefinida_texto ? `<strong>${esc(ultimaNota.nota_predefinida_texto)}</strong>` : ''}${ultimaNota.nota_predefinida_texto && ultimaNota.nota_libre ? ' — ' : ''}${esc(ultimaNota.nota_libre)}<div class="meta">${fechaCorta(ultimaNota.fecha)} &middot; ${esc(ultimaNota.autor)}</div></div>` : '<div class="empty">Sin notas registradas todavía.</div>'}
+      <div class="vr-section-title">Bitácora de gestión${bitacora.length>5?` (últimas 5 de ${bitacora.length})`:''}</div>
+      <div id="vr-bitacora-list"></div>
       <div class="vr-section-title">Pacientes afectados (${pacientes.length})</div>
       ${pacientes.length ? pacientes.map(p=>`<div class="vr-pac-row"><span>${p.nombre_paciente?esc(p.nombre_paciente):'Sin nombre'} · CC ${p.nit_paciente?esc(p.nit_paciente):'—'}</span><span>${p.pend_x_despachar??p.disponible??'—'} und. pendientes</span></div>`).join('') : '<div class="empty">Sin pacientes detallados para este caso.</div>'}
     `;
+    renderBitacoraList(bitacora.slice(0,5), 'vr-bitacora-list');
   } catch(err){
     body.innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}</div>`;
   }
