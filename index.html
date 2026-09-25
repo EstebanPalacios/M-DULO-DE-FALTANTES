@@ -812,10 +812,6 @@ License: MIT
               <div id="ind-cuentas"></div>
             </div>
           </div>
-          <div class="panel">
-            <div class="panel-head"><div><h2>Flujo de transferencias entre módulos</h2></div></div>
-            <div id="ind-transferencias"></div>
-          </div>
           <div class="grid-2col">
             <div class="panel">
               <div class="panel-head"><div><h2>SKU con más pacientes impactados</h2><div class="desc">No es lo mismo un código que se repite que uno que afecta a mucha gente distinta</div></div></div>
@@ -825,6 +821,10 @@ License: MIT
               <div class="panel-head"><div><h2>Pacientes más afectados</h2><div class="desc">Personas que han estado en más de un caso de faltante</div></div></div>
               <div id="ind-pacientes-top"></div>
             </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><h2>Flujo de transferencias entre módulos</h2></div></div>
+            <div id="ind-transferencias"></div>
           </div>
           <div class="panel">
             <div class="panel-head"><div><h2>Carga y atraso por módulo</h2><div class="desc">Unidades pendientes acumuladas y días promedio que llevan abiertos los casos activos de cada módulo</div></div></div>
@@ -2695,17 +2695,19 @@ async function abrirDetalleSku(codigo){
         <div class="vr-item"><div class="k">Casos abiertos ahora</div><div class="v">${d.casos_abiertos} de ${d.total_casos}</div></div>
         <div class="vr-item"><div class="k">Pacientes distintos afectados</div><div class="v">${d.pacientes_distintos}</div></div>
       </div>
-      <div class="vr-section-title">Casos con este código (${d.casos.length})</div>
-      ${d.casos.length ? d.casos.map(c=>`
+      <div class="vr-section-title">Último caso con este código</div>
+      ${d.casos.length ? (()=>{ const c = d.casos[0]; return `
         <div class="vr-pac-row sku-detalle-caso" data-caso="${esc(c.caso_id)}" data-modulo="${esc(c.modulo_actual)}" style="cursor:pointer;flex-wrap:wrap;gap:4px 12px;">
-          <span><strong>${esc(MODULE_LABELS[c.modulo_actual]||c.modulo_actual)}</strong> · ${c.activo?'Abierto':'Cerrado'} · ${c.dias_abierto} días
-            · ${c.responsable?esc(c.responsable):'Sin responsable asignado'}</span>
+          <span><strong>Caso ${c.id_negocio?esc(c.id_negocio):esc(c.caso_id)}</strong> · ${esc(MODULE_LABELS[c.modulo_actual]||c.modulo_actual)} · ${c.activo?'Abierto':'Cerrado'} · ${c.dias_abierto} días
+            ${c.fecha_creacion?` · creado ${fechaCorta(c.fecha_creacion)}`:''} · ${c.responsable?esc(c.responsable):'Sin responsable asignado'}</span>
           <span>
             ${c.tiene_bitacora ? '<span class="sku-badge sku-badge-mid" style="background:#DCFCE7;color:#166534;">Con gestión hoy</span>' : '<span class="sku-badge sku-badge-high">Sin gestión hoy</span>'}
             &middot; ${c.pacientes_afectados} paciente(s)
           </span>
         </div>
-      `).join('') : '<div class="empty">Sin casos para este código en el periodo.</div>'}
+        <div style="font-size:11.5px;color:var(--muted);margin:8px 0 0;">Clic para ver el detalle completo de este caso.
+          ${d.casos.length>1 ? ` Hubo ${d.casos.length-1} caso(s) anterior(es) con este mismo código en el periodo.` : ''}</div>
+      `; })() : '<div class="empty">Sin casos para este código en el periodo.</div>'}
     `;
     body.querySelectorAll('.sku-detalle-caso').forEach(row=>{
       row.addEventListener('click', ()=>{
@@ -2740,8 +2742,14 @@ function renderIndicadoresSkusPacientes(skus){
   const holder = document.getElementById('ind-skus-pacientes');
   if(!skus.length){ holder.innerHTML = '<div class="empty">Sin datos en este periodo.</div>'; return; }
   const maximo = Math.max(...skus.map(s=>s.pacientes_distintos));
-  holder.innerHTML = `<div class="chart-bars chart-bars--ranked">${skus.map(s=>barraHtml(`${s.codigo} · ${s.producto||''}`, s.pacientes_distintos, maximo)).join('')}</div>`;
+  holder.innerHTML = `<div class="chart-bars chart-bars--ranked">${skus.map(s=>
+    `<div class="sku-row-click" data-codigo="${esc(s.codigo)}" title="Ver detalle de este código" tabindex="0">${barraHtml(`${s.codigo} · ${s.producto||''}`, s.pacientes_distintos, maximo)}</div>`
+  ).join('')}</div>`;
   animarBarras(holder);
+  holder.querySelectorAll('.sku-row-click').forEach(row=>{
+    row.addEventListener('click', ()=> abrirDetalleSku(row.dataset.codigo));
+    row.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); abrirDetalleSku(row.dataset.codigo); } });
+  });
 }
 function renderIndicadoresPacientesTop(pacientes){
   const holder = document.getElementById('ind-pacientes-top');
@@ -4451,7 +4459,10 @@ async function ldbDetalleSku(codigo, fechaDesde, fechaHasta){
     return true;
   };
   const casos = todos.filter(c=> String(c.codigo)===String(codigo) && enRango(c));
-  casos.sort((a,b)=> (b.activo - a.activo) || b.dias_abierto - a.dias_abierto);
+  // El más reciente primero (por fecha de creación) -- así "casos[0]" es
+  // siempre el último caso que se abrió con este código, que es lo que
+  // le interesa ver a alguien que revisa por qué un SKU se sigue reabriendo.
+  casos.sort((a,b)=> (b.fecha_creacion||'').localeCompare(a.fecha_creacion||''));
   const pacientesUnicos = new Set();
   casos.forEach(c=>c.pacientes.forEach(p=>{ if(p.nit_paciente) pacientesUnicos.add(p.nit_paciente); }));
   return {
@@ -4459,10 +4470,10 @@ async function ldbDetalleSku(codigo, fechaDesde, fechaHasta){
     total_casos: casos.length, casos_abiertos: casos.filter(c=>c.activo).length,
     pacientes_distintos: pacientesUnicos.size,
     casos: casos.map(c=>({
-      caso_id: c.caso_id, modulo_actual: c.modulo_actual, activo: c.activo,
+      caso_id: c.caso_id, id_negocio: c.id_negocio||'', modulo_actual: c.modulo_actual, activo: c.activo,
       dias_abierto: c.dias_abierto, responsable: c.responsable||'', bodega_id: c.bodega_id,
       cuenta: c.cuenta||'', tiene_bitacora: c.tiene_bitacora, tipo_novedad: c.tipo_novedad,
-      pacientes_afectados: c.pacientes.length,
+      pacientes_afectados: c.pacientes.length, fecha_creacion: c.fecha_creacion||null,
       ultima_bitacora_fecha: c.ultima_bitacora_fecha||null,
       ultima_bitacora_nota_libre: c.ultima_bitacora_nota_libre||'',
     })),
