@@ -3292,7 +3292,7 @@ function agruparAliadosPorMolecula(rows){
       grupos[r.codigo] = {
         codigo: r.codigo, generico: r.generico, producto: r.producto,
         tipo_novedad: r.tipo_novedad, fecha_novedad: r.fecha_novedad,
-        cantidad_pedidos: 0, cantidad_pendientes: 0, casos: [], tiene_bitacora: false,
+        cantidad_pedidos: 0, cantidad_pendientes: 0, casos: [], transferido: false, tiene_bitacora: false,
       };
     }
     const g = grupos[r.codigo];
@@ -3300,6 +3300,11 @@ function agruparAliadosPorMolecula(rows){
     // (relación código-bodega) agrupados bajo el código, no la suma del
     // campo num_pedidos -- ver comentario en agruparCngPorMolecula.
     g.cantidad_pendientes += (r.pendiente || 0);
+    // Aunque en Aliados TODO llega por transferencia, la etiqueta sigue
+    // siendo útil: distingue lo recién transferido (que nadie ha revisado
+    // todavía) de lo que ya se viene gestionando hace días, y se puede
+    // desmarcar igual que en los otros módulos una vez alguien lo revisó.
+    if(r.transferido) g.transferido = true;
     if(r.tiene_bitacora) g.tiene_bitacora = true;
     g.casos.push(r);
   });
@@ -3308,7 +3313,7 @@ function agruparAliadosPorMolecula(rows){
 }
 const AL_MOL_COLUMNS = [
   {key:'_expand', label:'', filter:false, sort:false},
-  {key:'codigo', label:'Código', filter:true, sort:true},
+  {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido, r.casos.filter(c=>c.transferido).map(c=>c.caso_id), 'Aliados')},
   {key:'generico', label:'Principio activo', filter:true, sort:true},
   {key:'producto', label:'Descripción', filter:true, sort:false, width:220},
   {key:'cantidad_pedidos', label:'Cantidad pedidos', filter:true, sort:true, format:r=>formatoNum(r.cantidad_pedidos), filterVal:r=>String(r.cantidad_pedidos??'')},
