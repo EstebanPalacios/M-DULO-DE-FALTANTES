@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Seguridad: como la app se sirve como un solo archivo estático (GitHub
      Pages no permite fijar cabeceras HTTP personalizadas), esta política se
      declara aquí por meta tag. Limita a qué dominios puede conectarse la
@@ -178,7 +179,7 @@
   button{-webkit-tap-highlight-color:transparent;}
   a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--orange);outline-offset:2px;}
 
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;}
   .subtabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--border);}
   .subtab{background:none;border:none;padding:10px 4px;margin-right:22px;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;position:relative;transition:.15s;}
   .subtab:hover{color:var(--text);}
@@ -863,11 +864,14 @@ License: MIT
           </div></div>
           <button class="btn-primary" id="ab-consultar">Consultar</button>
         </div>
-        <div class="kpis">
+        <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));">
           <div class="kpi total"><div class="lbl">Registros</div><div class="val" id="ab-total">0</div><div class="trend">en seguimiento</div></div>
-          <div class="kpi vencidas"><div class="lbl">Unidades pendientes</div><div class="val" id="ab-neg">0</div><div class="trend">total en falta (desabastecimiento)</div></div>
+          <div class="kpi vencidas"><div class="lbl">Vencidas</div><div class="val" id="ab-vencidas">0</div><div class="trend">fecha entrega antigua ya pasó</div></div>
+          <div class="kpi hoy"><div class="lbl">Hoy</div><div class="val" id="ab-hoy">0</div><div class="trend">vencen hoy</div></div>
+          <div class="kpi futuras"><div class="lbl">Mayores a hoy</div><div class="val" id="ab-futuras">0</div><div class="trend">programadas</div></div>
           <div class="kpi hoy"><div class="lbl">Prioritarios</div><div class="val" id="ab-prio">0</div><div class="trend">marcados urgentes</div></div>
           <div class="kpi futuras"><div class="lbl">Con traslado activo</div><div class="val" id="ab-traslado">0</div><div class="trend">registros con traslado o solicitud</div></div>
+          <div class="kpi vencidas"><div class="lbl">Unidades pendientes</div><div class="val" id="ab-neg">0</div><div class="trend">total en falta (desabastecimiento)</div></div>
         </div>
         <div class="panel">
           <div class="panel-head">
@@ -897,6 +901,15 @@ License: MIT
           </div></div>
           <button class="btn-primary" id="al-consultar">Consultar</button>
           <button class="btn-ghost" id="al-limpiar">Limpiar filtros</button>
+        </div>
+        <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));">
+          <div class="kpi total"><div class="lbl">Registros</div><div class="val" id="al-total">0</div><div class="trend">bodegas en gestión</div></div>
+          <div class="kpi vencidas"><div class="lbl">Vencidas</div><div class="val" id="al-vencidas">0</div><div class="trend">fecha entrega antigua ya pasó</div></div>
+          <div class="kpi hoy"><div class="lbl">Hoy</div><div class="val" id="al-hoy">0</div><div class="trend">vencen hoy</div></div>
+          <div class="kpi futuras"><div class="lbl">Mayores a hoy</div><div class="val" id="al-futuras">0</div><div class="trend">programadas</div></div>
+          <div class="kpi hoy"><div class="lbl">Prioritarios</div><div class="val" id="al-prio">0</div><div class="trend">marcados urgentes</div></div>
+          <div class="kpi futuras"><div class="lbl">Moléculas</div><div class="val" id="al-molec">0</div><div class="trend">códigos distintos</div></div>
+          <div class="kpi vencidas"><div class="lbl">Sin gestionar</div><div class="val" id="al-sinbit">0</div><div class="trend">sin ninguna nota todavía</div></div>
         </div>
         <div class="panel">
           <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="legend-modulo">Gestión de alternativas</div><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div></div>
@@ -1516,6 +1529,15 @@ document.querySelectorAll('.cat[data-mod]').forEach(el=>{
   const iconHolder = el.querySelector('[data-mod-icon]');
   if(iconHolder) iconHolder.innerHTML = icon(MODULO_ICONS[mod], 22);
 });
+// Formato de miles para cualquier número que se muestre en pantalla --
+// un total de "3542" sin separador se lee mal y da pie a errores de lectura
+// (¿son 3.542 o 35.42?). Se usa en KPIs y en columnas numéricas de las
+// tablas; nunca en IDs, teléfonos ni códigos, que son texto aunque parezcan
+// número.
+function formatoNum(n){
+  if(n===null || n===undefined || n==='' || isNaN(n)) return '—';
+  return Number(n).toLocaleString('es-CO');
+}
 const TIPO_CLASS = {"Agotado":"b-agotado","Descontinuado":"b-descontinuado","Invima":"b-invima"};
 function tipoBadge(t){ const c = TIPO_CLASS[t]||'b-faltante'; return `<span class="badge ${c}">${esc(t)||'—'}</span>`; }
 function siNoBadge(v){ return `<span class="badge ${v? 'b-si':'b-no'}">${v?'Sí':'No'}</span>`; }
@@ -1967,15 +1989,15 @@ async function recomputeHome(forzar){
   const vencidas = conFecha.filter(c=>c.fecha_entrega_antigua.slice(0,10) < hoyStr).length;
   const hoy = conFecha.filter(c=>c.fecha_entrega_antigua.slice(0,10) === hoyStr).length;
   const futuras = conFecha.filter(c=>c.fecha_entrega_antigua.slice(0,10) > hoyStr).length;
-  document.getElementById('h-total').textContent = r.total_activos;
-  document.getElementById('h-vencidas').textContent = vencidas;
+  document.getElementById('h-total').textContent = formatoNum(r.total_activos);
+  document.getElementById('h-vencidas').textContent = formatoNum(vencidas);
   document.getElementById('h-vencidas-pct').textContent = (r.total_activos? Math.round(vencidas/r.total_activos*100):0)+'% del total';
-  document.getElementById('h-hoy').textContent = hoy;
-  document.getElementById('h-futuras').textContent = futuras;
+  document.getElementById('h-hoy').textContent = formatoNum(hoy);
+  document.getElementById('h-futuras').textContent = formatoNum(futuras);
 
-  document.getElementById('h-c-CNG').textContent = r.por_modulo.CNG || 0;
-  document.getElementById('h-c-ABAST').textContent = r.por_modulo.Abastecimiento || 0;
-  document.getElementById('h-c-ALIADOS').textContent = r.por_modulo.Aliados || 0;
+  document.getElementById('h-c-CNG').textContent = formatoNum(r.por_modulo.CNG || 0);
+  document.getElementById('h-c-ABAST').textContent = formatoNum(r.por_modulo.Abastecimiento || 0);
+  document.getElementById('h-c-ALIADOS').textContent = formatoNum(r.por_modulo.Aliados || 0);
 
   // Porcentaje de participación en cada tarjeta de módulo, para que la
   // tarjeta por sí sola diga "acá entra el X% de todo lo que hay activo"
@@ -2730,12 +2752,12 @@ function cngFilteredRows(){
 }
 function updateCngKpis(rows){
   const hoyStr = new Date().toISOString().slice(0,10);
-  document.getElementById('cng-total').textContent = rows.length;
+  document.getElementById('cng-total').textContent = formatoNum(rows.length);
   // Vencidas/Hoy/Programadas se calculan sobre "fecha_entrega_antigua"
   // (la fecha comprometida de entrega), no sobre la fecha de la novedad.
-  document.getElementById('cng-vencidas').textContent = rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) < hoyStr).length;
-  document.getElementById('cng-hoy').textContent = rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) === hoyStr).length;
-  document.getElementById('cng-futuras').textContent = rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) > hoyStr).length;
+  document.getElementById('cng-vencidas').textContent = formatoNum(rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) < hoyStr).length);
+  document.getElementById('cng-hoy').textContent = formatoNum(rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) === hoyStr).length);
+  document.getElementById('cng-futuras').textContent = formatoNum(rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) > hoyStr).length);
 }
 /* Agrupa los casos (uno por Bodega+Código) en filas de molécula (por Código,
    sumando entre todas las bodegas donde aparece) — igual a la hoja de ejemplo. */
@@ -2772,8 +2794,8 @@ const CNG_MOL_COLUMNS = [
   {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido, r.casos.filter(c=>c.transferido).map(c=>c.caso_id), 'CNG')},
   {key:'generico', label:'Principio activo', filter:true, sort:true},
   {key:'producto', label:'Descripción', filter:true, sort:false, width:220},
-  {key:'cantidad_pedidos', label:'Cantidad pedidos', filter:true, sort:true},
-  {key:'cantidad_pendientes', label:'Cantidad unidades pendientes', filter:true, sort:true},
+  {key:'cantidad_pedidos', label:'Cantidad pedidos', filter:true, sort:true, format:r=>formatoNum(r.cantidad_pedidos), filterVal:r=>String(r.cantidad_pedidos??'')},
+  {key:'cantidad_pendientes', label:'Cantidad unidades pendientes', filter:true, sort:true, format:r=>formatoNum(r.cantidad_pendientes), filterVal:r=>String(r.cantidad_pendientes??'')},
   {key:'tipo_novedad', label:'Novedad', filter:true, sort:true, format:r=>novedadConFecha(r), filterVal:r=>r.tipo_novedad||''},
   {key:'_actions', label:'Acciones', filter:false, sort:false},
 ];
@@ -3007,14 +3029,21 @@ function esNumeroConValor(v){
   return !isNaN(n) && n !== 0;
 }
 function updateAbastKpis(rows){
-  document.getElementById('ab-total').textContent = rows.length;
+  document.getElementById('ab-total').textContent = formatoNum(rows.length);
   // "Pendiente negativo" como CONTEO no aportaba nada -- casi todos los
   // registros de Abastecimiento tienen pendiente negativo por diseño (es la
   // razón de que estén en este módulo). Se reemplaza por la MAGNITUD total
   // en falta, que sí varía y refleja la severidad real.
-  document.getElementById('ab-neg').textContent = rows.reduce((s,r)=> s + (r.pendiente<0 ? Math.abs(r.pendiente) : 0), 0);
-  document.getElementById('ab-prio').textContent = rows.filter(r=>r.prioritario).length;
-  document.getElementById('ab-traslado').textContent = rows.filter(r=> esNumeroConValor(r.traslado) || esNumeroConValor(r.solicitud_traslado)).length;
+  document.getElementById('ab-neg').textContent = formatoNum(rows.reduce((s,r)=> s + (r.pendiente<0 ? Math.abs(r.pendiente) : 0), 0));
+  document.getElementById('ab-prio').textContent = formatoNum(rows.filter(r=>r.prioritario).length);
+  document.getElementById('ab-traslado').textContent = formatoNum(rows.filter(r=> esNumeroConValor(r.traslado) || esNumeroConValor(r.solicitud_traslado)).length);
+  // Igual que en CNG/Panel general: vencidas/hoy/mayores se calculan sobre
+  // la columna "fecha entrega antigua", no sobre fecha_novedad.
+  const hoyStrAb = new Date().toISOString().slice(0,10);
+  const conFechaAb = rows.filter(r=>r.fecha_entrega_antigua);
+  document.getElementById('ab-vencidas').textContent = formatoNum(conFechaAb.filter(r=>r.fecha_entrega_antigua.slice(0,10) < hoyStrAb).length);
+  document.getElementById('ab-hoy').textContent = formatoNum(conFechaAb.filter(r=>r.fecha_entrega_antigua.slice(0,10) === hoyStrAb).length);
+  document.getElementById('ab-futuras').textContent = formatoNum(conFechaAb.filter(r=>r.fecha_entrega_antigua.slice(0,10) > hoyStrAb).length);
 }
 const AB_COLUMNS = [
   {key:'_select', label:'', filter:false, sort:false},
@@ -3024,18 +3053,18 @@ const AB_COLUMNS = [
   {key:'cuenta', label:'Cuenta', filter:true, sort:true, format:r=>r.cuenta?esc(r.cuenta):'—'},
   {key:'prioritario', label:'Prioritario', filter:true, sort:true, format:r=>siNoBadge(!!r.prioritario), filterVal:r=>r.prioritario?'si':'no'},
   {key:'dias_abierto', label:'Días', filter:true, sort:true, format:r=>diasBadge(r.dias_abierto), filterVal:r=>String(r.dias_abierto??'')},
-  {key:'pendiente', label:'Pendiente', filter:true, sort:true, format:r=>`<span class="${r.pendiente<0?'pend-neg':'pend-pos'}">${r.pendiente??'—'}</span>`},
+  {key:'pendiente', label:'Pendiente', filter:true, sort:true, format:r=>`<span class="${r.pendiente<0?'pend-neg':'pend-pos'}">${formatoNum(r.pendiente)}</span>`, filterVal:r=>String(r.pendiente??'')},
   {key:'_actions', label:'Acciones', filter:false, sort:false},
   {key:'planeador', label:'Planeador', filter:true, sort:true, format:r=>r.planeador?esc(r.planeador):'—'},
   {key:'laboratorio', label:'Laboratorio', filter:true, sort:true, format:r=>r.laboratorio?esc(r.laboratorio):'—'},
   {key:'division', label:'División', filter:true, sort:true, format:r=>r.division?esc(r.division):'—'},
   {key:'bodega_origen', label:'Bodega origen', filter:true, sort:true, format:r=>r.bodega_origen?esc(r.bodega_origen):'—'},
-  {key:'cant_pedido', label:'Cant. pedido', filter:true, sort:true, format:r=>r.cant_pedido??'—'},
-  {key:'total_necesidad', label:'Total necesidad', filter:true, sort:true, format:r=>r.total_necesidad??'—'},
+  {key:'cant_pedido', label:'Cant. pedido', filter:true, sort:true, format:r=>formatoNum(r.cant_pedido), filterVal:r=>String(r.cant_pedido??'')},
+  {key:'total_necesidad', label:'Total necesidad', filter:true, sort:true, format:r=>formatoNum(r.total_necesidad), filterVal:r=>String(r.total_necesidad??'')},
   {key:'fecha_entrega_antigua', label:'Fecha entrega antigua', filter:true, sort:true, format:r=>fechaCorta(r.fecha_entrega_antigua)||'—'},
-  {key:'num_pedidos', label:'Núm. pedidos', filter:true, sort:true, format:r=>r.num_pedidos??'—'},
-  {key:'num_preagendas', label:'Núm. preagendas', filter:true, sort:true, format:r=>r.num_preagendas??'—'},
-  {key:'inventario', label:'Inventario', filter:true, sort:true, format:r=>r.inventario??'—'},
+  {key:'num_pedidos', label:'Núm. pedidos', filter:true, sort:true, format:r=>formatoNum(r.num_pedidos), filterVal:r=>String(r.num_pedidos??'')},
+  {key:'num_preagendas', label:'Núm. preagendas', filter:true, sort:true, format:r=>formatoNum(r.num_preagendas), filterVal:r=>String(r.num_preagendas??'')},
+  {key:'inventario', label:'Inventario', filter:true, sort:true, format:r=>formatoNum(r.inventario), filterVal:r=>String(r.inventario??'')},
   {key:'oc_bodega_destino', label:'OC destino', filter:true, sort:true, format:r=>r.oc_bodega_destino?esc(r.oc_bodega_destino):'—'},
   {key:'oc_bodega_origen', label:'OC origen', filter:true, sort:true, format:r=>r.oc_bodega_origen?esc(r.oc_bodega_origen):'—'},
   {key:'traslado', label:'Traslado', filter:true, sort:true, format:r=>r.traslado?esc(r.traslado):'—'},
@@ -3177,8 +3206,8 @@ const AL_MOL_COLUMNS = [
   {key:'codigo', label:'Código', filter:true, sort:true},
   {key:'generico', label:'Principio activo', filter:true, sort:true},
   {key:'producto', label:'Descripción', filter:true, sort:false, width:220},
-  {key:'cantidad_pedidos', label:'Cantidad pedidos', filter:true, sort:true},
-  {key:'cantidad_pendientes', label:'Cantidad unidades pendientes', filter:true, sort:true},
+  {key:'cantidad_pedidos', label:'Cantidad pedidos', filter:true, sort:true, format:r=>formatoNum(r.cantidad_pedidos), filterVal:r=>String(r.cantidad_pedidos??'')},
+  {key:'cantidad_pendientes', label:'Cantidad unidades pendientes', filter:true, sort:true, format:r=>formatoNum(r.cantidad_pendientes), filterVal:r=>String(r.cantidad_pendientes??'')},
   {key:'tipo_novedad', label:'Novedad', filter:true, sort:true, format:r=>novedadConFecha(r), filterVal:r=>r.tipo_novedad||''},
   {key:'_actions', label:'Acciones', filter:false, sort:false},
 ];
@@ -3224,8 +3253,22 @@ function alDetailHtml(molecula){
   </div>`;
 }
 let alTableApi = null, alMoleculasPorCodigo = {};
+function updateAlKpis(rows){
+  document.getElementById('al-total').textContent = formatoNum(rows.length);
+  document.getElementById('al-molec').textContent = formatoNum(new Set(rows.map(r=>r.codigo)).size);
+  document.getElementById('al-prio').textContent = formatoNum(rows.filter(r=>r.prioritario).length);
+  document.getElementById('al-sinbit').textContent = formatoNum(rows.filter(r=>!r.tiene_bitacora).length);
+  // Igual que en CNG/Abastecimiento/Panel general: vencidas/hoy/mayores
+  // sobre "fecha entrega antigua".
+  const hoyStrAl = new Date().toISOString().slice(0,10);
+  const conFechaAl = rows.filter(r=>r.fecha_entrega_antigua);
+  document.getElementById('al-vencidas').textContent = formatoNum(conFechaAl.filter(r=>r.fecha_entrega_antigua.slice(0,10) < hoyStrAl).length);
+  document.getElementById('al-hoy').textContent = formatoNum(conFechaAl.filter(r=>r.fecha_entrega_antigua.slice(0,10) === hoyStrAl).length);
+  document.getElementById('al-futuras').textContent = formatoNum(conFechaAl.filter(r=>r.fecha_entrega_antigua.slice(0,10) > hoyStrAl).length);
+}
 function renderAliados(){
   const rows = alFilteredRows();
+  updateAlKpis(rows);
   if(!casosAliados.length){
     document.getElementById('al-table').innerHTML = '<div class="empty">Aún no hay casos en D. Aliados — llegan solo por transferencia desde CNG o Abastecimiento cuando no se pueden resolver.</div>';
     return;
