@@ -4060,8 +4060,21 @@ async function ldbTodosCasosEnriquecidos(){
   const [casos, pacientes, transferencias] = await Promise.all([
     leerTabla('TablaCasos'), leerTabla('TablaPacientes'), leerTabla('TablaTransferencias'),
   ]);
+  // Tope de fechas válido: la fecha_entrega_antigua más alta que trae hoy el
+  // archivo maestro de casos. El archivo de pedidos/pacientes de las
+  // bodegas a veces trae una Fecha_A_Facturar defectuosa, muy por delante
+  // de cualquier fecha real del periodo (ej. pedidos para octubre o
+  // noviembre cuando el resto de la carga no pasa de agosto) -- esos
+  // pedidos no reflejan una fecha de entrega real, así que no deben verse
+  // ni contar en el detalle de pacientes de ningún caso.
+  let maxFechaEntregaAntigua = '';
+  casos.forEach(c=>{
+    const f = f10(c.fecha_entrega_antigua);
+    if(f && f > maxFechaEntregaAntigua) maxFechaEntregaAntigua = f;
+  });
   return casos.map(c=>{
-    const pacientesCaso = pacientes.filter(p=>String(p.caso_id)===String(c.caso_id) && p.activo);
+    const pacientesCaso = pacientes.filter(p=>String(p.caso_id)===String(c.caso_id) && p.activo &&
+      (!maxFechaEntregaAntigua || !f10(p.fecha_a_facturar) || f10(p.fecha_a_facturar) <= maxFechaEntregaAntigua));
     const transferenciasCaso = transferencias.filter(t=>String(t.caso_id)===String(c.caso_id));
     const diasAbierto = c.activo ? ldbDiasAbierto(c.fecha_creacion) : (c.fecha_cierre ? ldbDiasEntre(c.fecha_creacion, c.fecha_cierre) : 0);
     const ultimaTransferencia = transferenciasCaso.length ? transferenciasCaso.reduce((a,b)=>a.fecha>b.fecha?a:b).fecha : null;
