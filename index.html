@@ -289,6 +289,8 @@
   .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:18px;box-shadow:var(--shadow-sm);}
   .panel h2{margin:0 0 4px;font-size:15px;color:var(--navy);font-weight:700;}
   .panel .desc{font-size:12px;color:var(--muted);margin-bottom:12px;}
+  .legend-modulo{font-size:11px;color:var(--muted);opacity:.8;margin:1px 0 4px;font-weight:600;}
+  .cat .legend-modulo{margin:0 0 2px;}
   .panel-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:6px;}
   .bulkbar{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--muted);}
 
@@ -577,6 +579,7 @@ License: MIT
           <div class="cat" data-goto="cng" data-mod="CNG" tabindex="0" role="button">
             <div class="cat-icon" data-mod-icon="CNG"></div>
             <h3>CNG</h3>
+            <div class="legend-modulo">Faltantes con novedad</div>
             <span class="count" id="h-c-CNG">0</span>
             <div class="cat-pct" id="h-pct-CNG">0% del total activo</div>
             <div class="sub">Entrar al módulo <span class="arrow">&#8594;</span></div>
@@ -584,6 +587,7 @@ License: MIT
           <div class="cat" data-goto="abast" data-mod="Abastecimiento" tabindex="0" role="button">
             <div class="cat-icon" data-mod-icon="Abastecimiento"></div>
             <h3>Abastecimiento</h3>
+            <div class="legend-modulo">Faltantes sin novedad</div>
             <span class="count" id="h-c-ABAST">0</span>
             <div class="cat-pct" id="h-pct-Abastecimiento">0% del total activo</div>
             <div class="sub">Entrar al módulo <span class="arrow">&#8594;</span></div>
@@ -591,6 +595,7 @@ License: MIT
           <div class="cat" data-goto="aliados" data-mod="Aliados" tabindex="0" role="button">
             <div class="cat-icon" data-mod-icon="Aliados"></div>
             <h3>Desarrollo de aliados</h3>
+            <div class="legend-modulo">Gestión de alternativas</div>
             <span class="count" id="h-c-ALIADOS">0</span>
             <div class="cat-pct" id="h-pct-Aliados">0% del total activo</div>
             <div class="sub">Entrar al módulo <span class="arrow">&#8594;</span></div>
@@ -841,7 +846,7 @@ License: MIT
         </div>
         <div class="panel">
           <div class="panel-head">
-            <div><h2>CNG</h2><div class="desc">Expande cada molécula para ver el detalle por paciente en todas las bodegas</div></div>
+            <div><h2>CNG</h2><div class="legend-modulo">Faltantes con novedad</div><div class="desc">Expande cada molécula para ver el detalle por paciente en todas las bodegas</div></div>
           </div>
           <div id="cng-table"></div>
         </div>
@@ -857,13 +862,13 @@ License: MIT
         </div>
         <div class="kpis">
           <div class="kpi total"><div class="lbl">Registros</div><div class="val" id="ab-total">0</div><div class="trend">en seguimiento</div></div>
-          <div class="kpi vencidas"><div class="lbl">Pendiente negativo</div><div class="val" id="ab-neg">0</div><div class="trend">alerta de desabastecimiento</div></div>
+          <div class="kpi vencidas"><div class="lbl">Unidades pendientes</div><div class="val" id="ab-neg">0</div><div class="trend">total en falta (desabastecimiento)</div></div>
           <div class="kpi hoy"><div class="lbl">Prioritarios</div><div class="val" id="ab-prio">0</div><div class="trend">marcados urgentes</div></div>
-          <div class="kpi futuras"><div class="lbl">Con traslado activo</div><div class="val" id="ab-traslado">0</div><div class="trend">unidades en tránsito</div></div>
+          <div class="kpi futuras"><div class="lbl">Con traslado activo</div><div class="val" id="ab-traslado">0</div><div class="trend">registros con traslado o solicitud</div></div>
         </div>
         <div class="panel">
           <div class="panel-head">
-            <div><h2>Abastecimiento</h2><div class="desc">Todos los campos visibles en la misma tabla, sin expandir</div></div>
+            <div><h2>Abastecimiento</h2><div class="legend-modulo">Faltantes sin novedad</div><div class="desc">Todos los campos visibles en la misma tabla, sin expandir</div></div>
             <div class="bulkbar">
               <span id="ab-usuario-actual"></span>
               <button class="btn-ghost" id="ab-limpiar">Limpiar filtros</button>
@@ -891,7 +896,7 @@ License: MIT
           <button class="btn-ghost" id="al-limpiar">Limpiar filtros</button>
         </div>
         <div class="panel">
-          <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div></div>
+          <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="legend-modulo">Gestión de alternativas</div><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div></div>
           <div id="al-table"></div>
         </div>
       </div>
@@ -1155,27 +1160,42 @@ let _redimensionandoColumna = false;
 /* Las tablas de detalle expandido (pacientes por molécula en CNG, bodegas
    por molécula en Aliados) son HTML estático armado por fila -- a
    diferencia de las tablas principales (initTable), no tenían NINGÚN
-   filtro. Se agrega un único cuadro de texto que filtra por cualquier
-   columna a la vez (no una por columna, para no complicar un marcado que
-   no pasa por el motor genérico de tablas), buscando contra el texto
-   visible de cada fila. */
+   filtro. Se agrega una fila de filtros POR COLUMNA (misma fila/estilo
+   ".filter-row" que ya usan las tablas principales -- un cuadro de texto
+   por columna, no uno solo global) armada directamente en el <thead> de
+   cada tabla de detalle (ver cngDetailHtml/alDetailHtml), y esta función
+   la conecta filtrando cada <td> por su posición en vez del texto de toda
+   la fila, para que "Código" no traiga resultados de "Descripción". */
 function wireFiltroTablaDetalle(contenedor){
-  const input = contenedor.querySelector('.detalle-filtro');
-  if(!input) return;
-  let debounceFiltro = null;
-  input.addEventListener('input', ()=>{
-    clearTimeout(debounceFiltro);
-    debounceFiltro = setTimeout(()=>{
-      const q = input.value.trim().toLowerCase();
-      contenedor.querySelectorAll('table.excel-like tbody tr').forEach(tr=>{
-        const texto = tr.textContent.toLowerCase();
-        tr.style.display = (!q || texto.includes(q)) ? '' : 'none';
+  contenedor.querySelectorAll('table.excel-like').forEach(tabla=>{
+    const inputs = [...tabla.querySelectorAll('thead .filter-row .col-filter')];
+    if(!inputs.length) return;
+    const tbody = tabla.querySelector('tbody');
+    let debounceFiltro = null;
+    function aplicar(){
+      const activos = inputs
+        .map(inp=>({ idx: Number(inp.dataset.colIdx), q: inp.value.trim().toLowerCase() }))
+        .filter(f=>f.q);
+      tbody.querySelectorAll('tr').forEach(tr=>{
+        const celdas = tr.children;
+        const coincide = activos.every(f=>{
+          const celda = celdas[f.idx];
+          return celda && celda.textContent.toLowerCase().includes(f.q);
+        });
+        tr.style.display = coincide ? '' : 'none';
       });
-    }, 200);
+    }
+    inputs.forEach(inp=>{
+      inp.addEventListener('input', ()=>{
+        clearTimeout(debounceFiltro);
+        debounceFiltro = setTimeout(aplicar, 200);
+      });
+    });
   });
 }
 function hacerTablaRedimensionable(contenedor){
   contenedor.querySelectorAll('table.excel-like th').forEach(th=>{
+    if(th.closest('tr.filter-row')) return; // el manejador de ancho va en la fila de encabezado, no en la de filtros
     if(th.querySelector('.col-resizer')) return; // ya tiene, no duplicar
     th.style.position = 'relative';
     const handle = document.createElement('span');
@@ -1547,6 +1567,34 @@ function codigoConTransferido(codigo, transferido, casoIds, modulo){
 // caso se vuelve a transferir más adelante la etiqueta reaparece sola,
 // exactamente como pidió Esteban) en vez de agregar una columna nueva al
 // Excel solo para este estado.
+//
+// OJO: al igual que transferir, esto se aplica OPTIMISTA (se apaga en
+// pantalla al instante, mutando los mismos casosCNG/casosAbast/casosAliados/
+// resumenCache que ya están en memoria) y la escritura real a SharePoint
+// pasa por debajo. Un refresco/refetch inmediato acá se probó y NO sirve:
+// la lectura de vuelta contra el Excel puede llegar antes de que el propio
+// PATCH quede reflejado del lado de Microsoft, y la etiqueta "revive"
+// parpadeando con el dato viejo -- exactamente el bug que se quería evitar.
+function _marcarTransferidoVistoEnMemoria(casoIds, valor){
+  const idsSet = new Set(casoIds.map(String));
+  const previos = new Map();
+  ['CNG','Abastecimiento','Aliados'].forEach(mod=>{
+    MODULO_ARRAY_GET[mod]().forEach(c=>{
+      if(idsSet.has(String(c.caso_id))){ previos.set(String(c.caso_id), c.transferido); c.transferido = valor; }
+    });
+  });
+  if(resumenCache && resumenCache.casos){
+    resumenCache.casos.forEach(c=>{ if(idsSet.has(String(c.caso_id))) c.transferido = valor; });
+  }
+  return previos;
+}
+function _rerenderVistasConTransferido(){
+  ['CNG','Abastecimiento','Aliados'].forEach(mod=>{
+    const vista = {CNG:'cng', Abastecimiento:'abast', Aliados:'aliados'}[mod];
+    if(document.getElementById('view-'+vista).classList.contains('active')) MODULO_RENDER_FN[mod]();
+  });
+  if(document.getElementById('view-resumen').classList.contains('active') && rsTableApi) renderResumenTable();
+}
 document.addEventListener('click', async (e)=>{
   const tag = e.target.closest('.transferido-tag');
   if(!tag) return;
@@ -1554,17 +1602,22 @@ document.addEventListener('click', async (e)=>{
   const casoIds = (tag.dataset.transferidoCasos||'').split(',').filter(Boolean);
   const modulo = tag.dataset.transferidoModulo;
   if(!casoIds.length || !modulo) return;
-  tag.style.opacity = '.45'; tag.style.pointerEvents = 'none';
+
+  // 1) Optimista: desaparece YA, antes de tocar la red.
+  _marcarTransferidoVistoEnMemoria(casoIds, false);
+  _rerenderVistasConTransferido();
+
+  // 2) De verdad, en segundo plano.
   try{
     await apiPost('bitacora/lote?debug=true', {
       caso_ids: casoIds, modulo, nota_predefinida_id: null,
       nota_libre: 'Transferencia revisada y gestionada.', usuario_id: getSesion().usuario_id,
     });
-    toast('Marcado como visto.', true);
-    refrescarModuloActivoSinSkeleton();
+    invalidarCacheDatos(); // la próxima vez que se visite cada módulo se refresca de verdad, por si acaso
   } catch(err){
-    toast(err.message || 'No se pudo marcar como visto.');
-    tag.style.opacity=''; tag.style.pointerEvents='';
+    _marcarTransferidoVistoEnMemoria(casoIds, true);
+    _rerenderVistasConTransferido();
+    toast(`No se pudo guardar en SharePoint -- se deshizo el cambio en pantalla. ${err.message||''}`);
   }
 });
 function botonBitacora(claseExtra, dataAttrs, tieneBitacora, etiqueta){
@@ -2738,16 +2791,23 @@ function cngPacienteRow(caso, p){
 function cngDetailHtml(molecula){
   const filas = molecula._pacientesCombinados || [];
   if(!filas.length) return '<div class="empty">Sin pacientes detallados para esta molécula.</div>';
+  // Filtros POR COLUMNA en el propio encabezado (misma fila/estilo que las
+  // tablas principales) -- data-col-idx es la posición de la celda que le
+  // corresponde a cada input, usada por wireFiltroTablaDetalle para
+  // comparar solo esa columna, no la fila entera.
+  const colsDetalleCng = ['','Fecha','#Pedido','Bodega','Urgencia','Convenio','Código','Principio activo','Descripción','Cant. unid. pendientes','Cédula','Nombre','Tipo de fórmula','Novedad','Código alternativa','Principio activo (ALT)','Descripción (ALT)','Inv. alternativa',''];
+  const filtrablesCng = new Set([1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17]);
   return `<div class="bulkbar" style="margin:0 0 10px;">
       <span id="cng-p-sel-count-${esc(molecula.codigo)}">0 seleccionados</span>
       <button class="btn-ghost cng-p-bulk-note" data-mol="${esc(molecula.codigo)}">${icon('book',13)} Agregar nota a seleccionados</button>
-      <input type="text" class="detalle-filtro" placeholder="Filtrar por cualquier columna (bodega, convenio, cédula, nombre...)" style="margin-left:auto;min-width:260px;">
     </div>
     <div class="table-scroll"><table class="excel-like"><thead><tr>
       <th><input type="checkbox" class="cng-p-select-all" title="Seleccionar todos"></th><th>Fecha</th><th>#Pedido</th><th>Bodega</th><th>Urgencia</th><th>Convenio</th><th>Código</th><th>Principio activo</th><th>Descripción</th>
       <th>Cant. unid. pendientes</th><th>Cédula</th><th>Nombre</th><th>Tipo de fórmula</th><th>Novedad</th>
       <th>Código alternativa</th><th>Principio activo (ALT)</th><th>Descripción (ALT)</th><th>Inv. alternativa</th><th>Acciones</th>
-    </tr></thead>
+    </tr>
+    <tr class="filter-row">${colsDetalleCng.map((_,i)=> filtrablesCng.has(i) ? `<th><input type="text" class="col-filter" data-col-idx="${i}"></th>` : '<th></th>').join('')}</tr>
+    </thead>
     <tbody>${filas.map(({caso,p})=>cngPacienteRow(caso,p)).join('')}</tbody></table></div>`;
 }
 let cngTableApi = null;
@@ -2897,11 +2957,24 @@ function abFilteredRows(){
     return true;
   });
 }
+// "Traslado o solicitud de traslado" cuenta como activo si esa columna trae
+// un número real (no vacío, no cero) -- puede venir como número o como
+// texto desde el Excel de origen, por eso se intenta parsear en vez de
+// solo chequear "truthy" (un '0' de texto no debe contar como activo).
+function esNumeroConValor(v){
+  if(v===null || v===undefined || v==='') return false;
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+  return !isNaN(n) && n !== 0;
+}
 function updateAbastKpis(rows){
   document.getElementById('ab-total').textContent = rows.length;
-  document.getElementById('ab-neg').textContent = rows.filter(r=>r.pendiente<0).length;
+  // "Pendiente negativo" como CONTEO no aportaba nada -- casi todos los
+  // registros de Abastecimiento tienen pendiente negativo por diseño (es la
+  // razón de que estén en este módulo). Se reemplaza por la MAGNITUD total
+  // en falta, que sí varía y refleja la severidad real.
+  document.getElementById('ab-neg').textContent = rows.reduce((s,r)=> s + (r.pendiente<0 ? Math.abs(r.pendiente) : 0), 0);
   document.getElementById('ab-prio').textContent = rows.filter(r=>r.prioritario).length;
-  document.getElementById('ab-traslado').textContent = rows.reduce((s,r)=>s+(r.traslado||0),0);
+  document.getElementById('ab-traslado').textContent = rows.filter(r=> esNumeroConValor(r.traslado) || esNumeroConValor(r.solicitud_traslado)).length;
 }
 const AB_COLUMNS = [
   {key:'_select', label:'', filter:false, sort:false},
@@ -3093,17 +3166,20 @@ function alAlternativasHtml(){
   </div>`;
 }
 function alDetailHtml(molecula){
+  // Filtros POR COLUMNA en el encabezado -- ver comentario en cngDetailHtml.
+  const filtrablesAl = new Set([1,2,3,4,5,6,7,8]);
   return `<div style="padding:2px 0 14px;">
     <div class="bulkbar" style="margin:0 0 10px;">
       <span id="al-b-sel-count-${esc(molecula.codigo)}">0 seleccionados</span>
       <button class="btn-ghost al-b-bulk-note" data-mol="${esc(molecula.codigo)}">${icon('book',13)} Agregar nota a todas</button>
       <button class="btn-orange al-b-bulk-tr" data-mol="${esc(molecula.codigo)}">${icon('transfer',13)} Transferir seleccionadas</button>
-      <input type="text" class="detalle-filtro" placeholder="Filtrar por cualquier columna" style="margin-left:auto;min-width:220px;">
     </div>
     <div class="table-scroll"><table class="excel-like"><thead><tr>
       <th><input type="checkbox" class="al-b-select-all" data-mol="${esc(molecula.codigo)}" title="Seleccionar todas"></th><th>Bodega</th><th>Código</th><th>Descripción</th><th>Proveedor</th><th>Cliente</th>
       <th>Cant. pedidos</th><th>Cant. unid. pendientes</th><th>Novedad</th><th>Bitácora</th>
-    </tr></thead><tbody>${molecula.casos.map(alBodegaRow).join('')}</tbody></table></div>
+    </tr>
+    <tr class="filter-row">${Array.from({length:10},(_,i)=> filtrablesAl.has(i) ? `<th><input type="text" class="col-filter" data-col-idx="${i}"></th>` : '<th></th>').join('')}</tr>
+    </thead><tbody>${molecula.casos.map(alBodegaRow).join('')}</tbody></table></div>
     ${alAlternativasHtml()}
   </div>`;
 }
