@@ -420,6 +420,9 @@
   .bitacora-item .bit-marker{flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:4px;background:var(--muted);}
   .bitacora-item.es-transferencia{border-left:3px solid var(--green);background:rgba(13,148,136,.05);}
   .bitacora-item.es-transferencia .bit-marker{background:var(--green);box-shadow:0 0 0 3px rgba(13,148,136,.18);animation:loginPulse 1.8s ease-in-out infinite;}
+  .bitacora-item.es-transferencia-antigua{border-left:3px solid #D7DBE1;}
+  .bitacora-item.es-transferencia-antigua .bit-marker{background:#C7CDD6;}
+  .bitacora-item.es-transferencia-antigua .meta .tipo-tag{color:#9AA3AF;}
   .bitacora-item .bit-body{flex:1 1 auto;min-width:0;}
   .bitacora-item .bit-texto{line-height:1.4;}
   .bitacora-item .meta{color:var(--muted);font-size:10.5px;margin-top:3px;display:flex;align-items:center;gap:6px;}
@@ -877,7 +880,7 @@ License: MIT
           </div>
           <div class="bulkbar" style="margin-bottom:12px;">
             <span id="ab-sel-count">0 seleccionados</span>
-            <button class="btn-ghost" id="ab-bulk-note">Agregar nota a todos</button>
+            <button class="btn-ghost" id="ab-bulk-note">Agregar nota a seleccionados</button>
             <button class="btn-orange" id="ab-bulk-transfer">Transferir seleccionados</button>
           </div>
           <div id="ab-table"></div>
@@ -1679,13 +1682,27 @@ function renderBitacoraList(entradas, containerId){
   const list = document.getElementById(containerId || 'bitacora-list');
   if(!list) return;
   if(!entradas || !entradas.length){ list.innerHTML = '<div class="empty">Sin entradas registradas todavía.</div>'; return; }
+  // Dedupe por bitacora_id -- una nota de bitácora es un registro único; si
+  // llega repetida a esta lista (por ejemplo, una vista que combina el
+  // historial de varios casos) nunca debe pintarse dos veces.
+  const vistos = new Set();
+  entradas = entradas.filter(b=>{
+    const id = b.bitacora_id || `${b.caso_id}|${b.fecha}|${b.nota_libre}`;
+    if(vistos.has(id)) return false;
+    vistos.add(id);
+    return true;
+  });
   // Las notas que llegaron por una transferencia (es_automatica) se marcan
-  // con el mismo puntito verde parpadeante del indicador "Transferido", para
-  // separarlas de un vistazo de las que son seguimiento/gestión real --
-  // sin ese contraste todas se veían igual de "planas" en la lista.
+  // con el mismo puntito verde parpadeante del indicador "Transferido" --
+  // pero SOLO la más reciente de todas las transferencias en esta lista;
+  // las demás quedan en gris claro, para separar lo recién llegado del
+  // resto del historial de transferencias.
+  const fechaUltimaTransferencia = entradas.reduce((max,b)=> (b.es_automatica && (!max || b.fecha>max)) ? b.fecha : max, null);
   list.innerHTML = entradas.map(b=>{
     const esTransferencia = !!b.es_automatica;
-    return `<div class="bitacora-item ${esTransferencia?'es-transferencia':''}">
+    const esLaMasReciente = esTransferencia && b.fecha===fechaUltimaTransferencia;
+    const clase = esLaMasReciente ? 'es-transferencia' : (esTransferencia ? 'es-transferencia-antigua' : '');
+    return `<div class="bitacora-item ${clase}">
       <span class="bit-marker"></span>
       <div class="bit-body">
         <div class="meta">
@@ -1879,7 +1896,7 @@ document.getElementById('transfer-save').addEventListener('click', async ()=>{
   if(!nota){ toast('La nota de transferencia es obligatoria.'); return; }
   btnGuardar.disabled = true;
   const origen = transferModuloOrigen;
-  const ids = transferCasoIds.slice();
+  const ids = [...new Set(transferCasoIds.map(String))];
   const usuarioId = getSesion().usuario_id;
 
   // 1) Optimista: se ve reflejado YA, antes de tocar la red.
@@ -2800,6 +2817,7 @@ function cngDetailHtml(molecula){
   return `<div class="bulkbar" style="margin:0 0 10px;">
       <span id="cng-p-sel-count-${esc(molecula.codigo)}">0 seleccionados</span>
       <button class="btn-ghost cng-p-bulk-note" data-mol="${esc(molecula.codigo)}">${icon('book',13)} Agregar nota a seleccionados</button>
+      <button class="btn-orange cng-p-bulk-tr" data-mol="${esc(molecula.codigo)}">${icon('transfer',13)} Transferir seleccionados</button>
     </div>
     <div class="table-scroll"><table class="excel-like"><thead><tr>
       <th><input type="checkbox" class="cng-p-select-all" title="Seleccionar todos"></th><th>Fecha</th><th>#Pedido</th><th>Bodega</th><th>Urgencia</th><th>Convenio</th><th>Código</th><th>Principio activo</th><th>Descripción</th>
@@ -2886,26 +2904,42 @@ async function cargarDetalleMoleculaCng(codigo){
     wireCngPacienteDetalle(detalle, molecula);
   } catch(err){ detalle.innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}</div>`; }
 }
+// Una fila oculta por el filtro de columna (display:none, ver
+// wireFiltroTablaDetalle) NUNCA debe poder marcarse por "seleccionar
+// todos" -- si no, "13 seleccionados" incluye registros que la persona ni
+// siquiera está viendo. Se usa en todas las tablas de detalle (CNG y
+// Aliados) para decidir qué casillas toca el checkbox de encabezado.
+function _filaEsVisible(cb){
+  const tr = cb.closest('tr');
+  return !!tr && tr.style.display !== 'none';
+}
 function wireCngPacienteDetalle(detalle, molecula){
   const seleccionados = new Set();
   hacerTablaRedimensionable(detalle);
   wireFiltroTablaDetalle(detalle);
+  function actualizarContador(){
+    detalle.querySelector('#cng-p-sel-count-'+molecula.codigo).textContent = seleccionados.size + ' seleccionados';
+    const selAll = detalle.querySelector('.cng-p-select-all');
+    const visibles = detalle.querySelectorAll('.cng-p-select').length ? [...detalle.querySelectorAll('.cng-p-select')].filter(_filaEsVisible) : [];
+    if(selAll) selAll.checked = visibles.length>0 && visibles.every(cb=>cb.checked);
+  }
   detalle.querySelectorAll('.cng-p-select').forEach(cb=>cb.addEventListener('change', ()=>{
     const key = cb.dataset.caso+':'+cb.dataset.pid;
     if(cb.checked) seleccionados.add(key); else seleccionados.delete(key);
-    detalle.querySelector('#cng-p-sel-count-'+molecula.codigo).textContent = seleccionados.size + ' seleccionados';
-    const selAll = detalle.querySelector('.cng-p-select-all');
-    if(selAll) selAll.checked = detalle.querySelectorAll('.cng-p-select').length===seleccionados.size;
+    actualizarContador();
   }));
   const selAllHeader = detalle.querySelector('.cng-p-select-all');
   if(selAllHeader) selAllHeader.addEventListener('change', ()=>{
     const marcar = selAllHeader.checked;
+    // Solo toca las filas VISIBLES con el filtro actual -- las que están
+    // fuera de vista se quedan exactamente como estaban.
     detalle.querySelectorAll('.cng-p-select').forEach(cb=>{
+      if(!_filaEsVisible(cb)) return;
       cb.checked = marcar;
       const key = cb.dataset.caso+':'+cb.dataset.pid;
       if(marcar) seleccionados.add(key); else seleccionados.delete(key);
     });
-    detalle.querySelector('#cng-p-sel-count-'+molecula.codigo).textContent = seleccionados.size + ' seleccionados';
+    actualizarContador();
   });
   detalle.querySelectorAll('.cng-p-bit').forEach(b=>b.addEventListener('click', ()=>{
     openBitacora(b.dataset.caso, 'CNG', b.dataset.pid, `Paciente · ${molecula.codigo}`, ()=>cargarDetalleMoleculaCng(molecula.codigo));
@@ -2918,6 +2952,12 @@ function wireCngPacienteDetalle(detalle, molecula){
     if(!seleccionados.size){ toast('Selecciona al menos un paciente.'); return; }
     const casoIds = [...new Set([...seleccionados].map(k=>k.split(':')[0]))];
     openBulkNote(casoIds, 'CNG', `${seleccionados.size} paciente(s) seleccionados`);
+  });
+  const bulkTrBtn = detalle.querySelector('.cng-p-bulk-tr');
+  if(bulkTrBtn) bulkTrBtn.addEventListener('click', ()=>{
+    if(!seleccionados.size){ toast('Selecciona al menos un paciente.'); return; }
+    const casoIds = [...new Set([...seleccionados].map(k=>k.split(':')[0]))];
+    openTransfer(casoIds, 'CNG', `${seleccionados.size} paciente(s) seleccionados`);
   });
 }
 async function refreshCng(silencioso){
@@ -3171,7 +3211,7 @@ function alDetailHtml(molecula){
   return `<div style="padding:2px 0 14px;">
     <div class="bulkbar" style="margin:0 0 10px;">
       <span id="al-b-sel-count-${esc(molecula.codigo)}">0 seleccionados</span>
-      <button class="btn-ghost al-b-bulk-note" data-mol="${esc(molecula.codigo)}">${icon('book',13)} Agregar nota a todas</button>
+      <button class="btn-ghost al-b-bulk-note" data-mol="${esc(molecula.codigo)}">${icon('book',13)} Agregar nota a seleccionadas</button>
       <button class="btn-orange al-b-bulk-tr" data-mol="${esc(molecula.codigo)}">${icon('transfer',13)} Transferir seleccionadas</button>
     </div>
     <div class="table-scroll"><table class="excel-like"><thead><tr>
@@ -3221,7 +3261,11 @@ function renderAliados(){
       }));
       tbody.querySelectorAll('.al-b-select-all').forEach(cbAll=>cbAll.addEventListener('change', ()=>{
         const contenedor = cbAll.closest('.nested') || cbAll.closest('table').parentElement.parentElement;
+        // Igual que en CNG: "seleccionar todas" solo toca las bodegas
+        // VISIBLES con el filtro de columna actual, nunca las que están
+        // fuera de vista.
         contenedor.querySelectorAll('.al-b-select').forEach(cb=>{
+          if(!_filaEsVisible(cb)) return;
           cb.checked = cbAll.checked;
           cb.dispatchEvent(new Event('change', {bubbles:true}));
         });
@@ -3233,7 +3277,7 @@ function renderAliados(){
         btn.addEventListener('click', ()=>{
           const codigo = btn.dataset.mol;
           const contenedor = btn.closest('.nested') || btn.parentElement.parentElement;
-          const seleccionadas = [...contenedor.querySelectorAll('.al-b-select:checked')].map(cb=>cb.dataset.caso);
+          const seleccionadas = [...new Set([...contenedor.querySelectorAll('.al-b-select:checked')].map(cb=>cb.dataset.caso))];
           if(!seleccionadas.length){ toast('Selecciona al menos una bodega.'); return; }
           if(btn.classList.contains('al-b-bulk-note')) openBulkNote(seleccionadas, 'Aliados', `${seleccionadas.length} bodega(s) seleccionadas`);
           else openTransfer(seleccionadas, 'Aliados', `${seleccionadas.length} bodega(s) seleccionadas`);
@@ -3951,10 +3995,13 @@ async function ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, 
 async function ldbAgregarBitacoraLote(casoIds, modulo, notaPredefinidaId, notaLibre, usuarioId){
   if(!casoIds || !casoIds.length) throw new Error('No se enviaron casos para la nota masiva.');
   if(!notaPredefinidaId && !(notaLibre && notaLibre.trim())) throw new Error('Debes indicar una nota predefinida o escribir una nota libre.');
-  for(const casoId of casoIds){
+  // Defensa extra: sin importar qué pantalla haya armado la lista de casos,
+  // nunca se escribe la misma nota dos veces sobre el mismo caso.
+  const idsUnicos = [...new Set(casoIds.map(String))];
+  for(const casoId of idsUnicos){
     await ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, usuarioId, null, false);
   }
-  return {ok:true, casos_afectados: casoIds.length};
+  return {ok:true, casos_afectados: idsUnicos.length};
 }
 async function ldbNotasPredefinidas(modulo){
   const notas = await leerTabla('TablaNotas');
