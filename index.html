@@ -1075,7 +1075,7 @@ License: MIT
 </div>
 
 <div id="toast"></div>
-<div id="saving-pill"><span class="sp-spin"></span><span id="saving-pill-text">Guardando en SharePoint...</span></div>
+<div id="saving-pill"><span class="sp-spin"></span><span id="saving-pill-text">Guardando...</span></div>
 
 <script>
 /* ============================================================
@@ -1696,7 +1696,7 @@ document.addEventListener('click', async (e)=>{
   } catch(err){
     _marcarTransferidoVistoEnMemoria(casoIds, true);
     _rerenderVistasConTransferido();
-    toast(`No se pudo guardar en SharePoint -- se deshizo el cambio en pantalla. ${err.message||''}`);
+    toast(`No se pudo guardar el cambio -- se deshizo en pantalla. ${err.message||''}`);
   }
 });
 function botonBitacora(claseExtra, dataAttrs, tieneBitacora, etiqueta){
@@ -1982,7 +1982,7 @@ document.getElementById('transfer-save').addEventListener('click', async ()=>{
 
   // 2) De verdad, en segundo plano -- una por una (varias escrituras
   // simultáneas contra el mismo libro de Excel pueden chocar entre sí).
-  marcarGuardando(true, ids.length>1 ? `Guardando ${ids.length} transferencias en SharePoint...` : 'Guardando transferencia en SharePoint...');
+  marcarGuardando(true, ids.length>1 ? `Guardando ${ids.length} transferencias...` : 'Guardando transferencia...');
   try{
     for(const id of ids){
       await apiPost(`casos/${id}/transferir?debug=true`, {modulo_destino: destino, nota, usuario_id: usuarioId});
@@ -1990,7 +1990,7 @@ document.getElementById('transfer-save').addEventListener('click', async ()=>{
     invalidarCacheDatos(); // la próxima vez que se visite cada módulo se refresca de verdad, por si acaso
   } catch(err){
     revertirTransferenciaOptimista(respaldo);
-    toast(`No se pudo guardar la transferencia en SharePoint — se deshizo el cambio en pantalla. ${err.message||''}`);
+    toast(`No se pudo guardar la transferencia — se deshizo el cambio en pantalla. ${err.message||''}`);
   } finally {
     marcarGuardando(false);
   }
@@ -3780,7 +3780,7 @@ async function graphFetch(path, opciones){
       }
       const cuerpo = await r.json().catch(()=>({}));
       const msgBase = (cuerpo.error && cuerpo.error.message) || `Microsoft Graph respondió con error ${r.status}`;
-      if(r.status === 423) throw new Error('El archivo de Excel está siendo usado por otra persona en este momento. Intenta de nuevo en unos segundos.');
+      if(r.status === 423) throw new Error('El sistema está siendo actualizado por otra persona en este momento. Intenta de nuevo en unos segundos.');
       if(r.status === 429) throw new Error('Hay demasiadas solicitudes al mismo tiempo (varias personas trabajando a la vez). Intenta de nuevo en unos segundos.');
       throw new Error(msgBase);
     }
@@ -3845,7 +3845,7 @@ async function resolverArchivoExcel(){
   SP_FOLDER_ID_RAIZ = carpeta.id;
   const archivo = (carpeta.children||[]).find(f=>f.name === SP_CONFIG.nombreArchivo);
   if(!archivo){
-    throw new Error(`No encontré el archivo '${SP_CONFIG.nombreArchivo}' en la carpeta de SharePoint. Verifica que esté subido ahí con ese nombre exacto.`);
+    throw new Error('No se pudo encontrar la fuente de datos configurada para la aplicación. Comunícate con el administrador.');
   }
   SP_ITEM_ID = archivo.id;
 }
@@ -4127,7 +4127,7 @@ async function ldbVerificarLoginMicrosoft(){
   const email = (msalCuenta.username || '').toLowerCase();
   const usuarios = await leerTabla('TablaUsuarios', true);
   const u = usuarios.find(x=> (x.email||'').toLowerCase()===email && x.activo);
-  if(!u) throw new Error(`Tu correo (${msalCuenta.username}) inició sesión con Microsoft correctamente, pero no tiene acceso configurado. Pídele a un administrador que agregue una fila con tu correo en la hoja "Usuarios" del Excel.`);
+  if(!u) throw new Error(`Tu correo (${msalCuenta.username}) inició sesión con Microsoft correctamente, pero no tiene acceso configurado. Comunícate con el administrador.`);
   return {usuario_id:u.usuario_id, nombre:u.nombre || msalCuenta.name || email, rol:u.rol, modulo_asignado:u.modulo_asignado};
 }
 
@@ -4671,7 +4671,7 @@ function ldbQS(path){
   return params;
 }
 function _asegurarDB(){
-  if(!DB_DISPONIBLE) throw new Error('Todavía no está conectado a SharePoint. Revisa la configuración (Client ID / Tenant ID) en el código.');
+  if(!DB_DISPONIBLE) throw new Error('La aplicación todavía no está lista para usarse. Comunícate con el administrador.');
 }
 async function apiGet(path){
   _asegurarDB();
@@ -5220,7 +5220,7 @@ async function intentarLoginMicrosoft(){
   const errorBox = document.getElementById('login-error');
   errorBox.style.display = 'none';
   if(!DB_DISPONIBLE){
-    mostrarLogin('Falta terminar de configurar la conexión con SharePoint (Client ID / Tenant ID) — avísale a quien esté armando esto.');
+    mostrarLogin('La aplicación todavía no está lista para usarse. Comunícate con el administrador.');
     return;
   }
   btn.disabled = true;
@@ -5261,7 +5261,7 @@ async function iniciarAppLocal(){
   await inicializarDB();
   actualizarEstadoConexion();
   if(!DB_DISPONIBLE){
-    mostrarLogin('Falta terminar de configurar la conexión con SharePoint (Client ID / Tenant ID) — avísale a quien esté armando esto.');
+    mostrarLogin('La aplicación todavía no está lista para usarse. Comunícate con el administrador.');
     return;
   }
   const sesion = getSesion();
@@ -5362,14 +5362,14 @@ document.getElementById('carga-procesar').addEventListener('click', async ()=>{
   try{
     const r = await ejecutarIngestaLocal(cargaArchivos, !ensayo);
     resultadoDiv.innerHTML = `<div class="resumen-carga">
-      <strong>${ensayo ? 'Ensayo completado — no se guardó nada todavía:' : 'Guardado en tu Excel de SharePoint:'}</strong><br>
+      <strong>${ensayo ? 'Ensayo completado — no se guardó nada todavía:' : 'Guardado correctamente:'}</strong><br>
       Casos nuevos: <strong>${r.nuevos_insertados}</strong><br>
       Casos que continúan (actualizados): <strong>${r.casos_actualizados}</strong><br>
       Casos que se cerraron: <strong>${r.casos_cerrados}</strong><br>
       Filas de pacientes cargadas: <strong>${r.filas_pacientes_cargadas}</strong>
       ${ensayo ? '<br><br>Si estos números se ven bien, desmarca "Modo ensayo" arriba y vuelve a procesar para guardar de verdad.' : ''}
     </div>`;
-    toast(ensayo ? 'Ensayo completado.' : 'Datos guardados localmente.', true);
+    toast(ensayo ? 'Ensayo completado.' : 'Datos guardados.', true);
     if(!ensayo) invalidarCacheDatos();
   } catch(err){
     resultadoDiv.innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}</div>`;
