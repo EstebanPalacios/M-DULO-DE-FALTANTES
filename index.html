@@ -353,7 +353,7 @@
   .ms-clear{border:none;background:none;color:var(--info);cursor:pointer;font-size:11.5px;font-weight:700;}
 
   /* overlays */
-  .overlay{display:none;position:fixed;inset:0;background:rgba(14,40,65,.55);align-items:center;justify-content:center;z-index:120;}
+  .overlay{display:flex;position:fixed;inset:0;background:rgba(14,40,65,.55);align-items:center;justify-content:center;z-index:120;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .16s ease,visibility .16s ease;}
   #login-overlay{z-index:110;}
   .login-overlay{padding:0;align-items:stretch;justify-content:stretch;background:var(--navy);}
   .login-split{display:flex;width:100%;height:100%;}
@@ -396,7 +396,7 @@
   .login-link-btn{display:block;width:100%;text-align:center;background:none;border:none;color:var(--muted);font-size:11.5px;margin-top:18px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
   .login-link-btn:hover{color:var(--text);}
   @media (max-width:760px){ .login-hero{display:none;} .login-panel{padding:24px;} }
-  .overlay.active{display:flex;}
+  .overlay.active{opacity:1;visibility:visible;pointer-events:auto;}
   .modal{background:#fff;border-radius:10px;padding:20px 24px;width:460px;max-width:92vw;max-height:86vh;overflow-y:auto;animation:modalIn .22s cubic-bezier(.16,1,.3,1);}
   .vr-modal{width:560px;}
   .vr-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px;}
@@ -723,7 +723,7 @@ License: MIT
 
         <div class="panel">
           <div class="panel-head">
-            <div><h2>Exportar reporte</h2><div class="desc">Trae TODOS los casos creados en el rango (abiertos y ya cerrados), con trazabilidad completa: ruta de transferencias, historial de gestión caso por caso, fecha de solución y detalle por paciente — listo para tablas dinámicas</div></div>
+            <div><h2>Exportar reporte</h2><div class="desc">Trae TODOS los módulos y TODOS los casos creados en el rango (abiertos y ya cerrados) — no usa los filtros de Módulo/Estado de la tabla de abajo, con trazabilidad completa: ruta de transferencias, historial de gestión caso por caso, fecha de solución y detalle por paciente — listo para tablas dinámicas</div></div>
           </div>
           <div class="filters" style="margin-bottom:0;">
             <div class="field"><label>Desde</label><input type="date" id="rs-exp-desde"></div>
@@ -793,17 +793,27 @@ License: MIT
           </div>
           <div id="ind-kpis"></div>
           <div id="ind-comparacion-info" style="display:none;font-size:11.5px;color:var(--muted);margin:-10px 0 18px 2px;"></div>
+          <div class="grid-2col">
+            <div class="panel">
+              <div class="panel-head"><div><h2>SKUs en riesgo de reapertura</h2><div class="desc">No solo cuántas veces se repitió: si sigue abierto hoy, si se está reabriendo cada vez más seguido, y si alguna vez tardó mucho en resolverse -- combinado en un puntaje, mirando el historial completo de cada código</div></div></div>
+              <div id="ind-skus-riesgo"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><div><h2>Bodegas con atraso fuera de lo normal</h2><div class="desc">Bodegas cuyo promedio de días abiertos está muy por encima del promedio de las demás bodegas en este periodo (no un número fijo, sino comparado entre ellas)</div></div></div>
+              <div id="ind-bodegas-atraso"></div>
+            </div>
+          </div>
           <div class="panel">
             <div class="panel-head"><div><h2>Casos nuevos por día</h2><div class="desc">Volumen diario de casos creados en el periodo seleccionado</div></div></div>
             <div id="ind-tendencia"></div>
           </div>
           <div class="grid-2col">
             <div class="panel">
-              <div class="panel-head"><div><h2>Por tipo de novedad</h2><div class="desc">Volumen y tiempo promedio de resolución</div></div></div>
+              <div class="panel-head"><div><h2>Por tipo de novedad</h2><div class="desc">Volumen de casos creados en el periodo. El tiempo promedio de resolución solo se calcula sobre los casos de ese tipo que ya están cerrados</div></div></div>
               <div id="ind-tipo"></div>
             </div>
             <div class="panel">
-              <div class="panel-head"><div><h2>Distribución por módulo</h2></div></div>
+              <div class="panel-head"><div><h2>Distribución por módulo</h2><div class="desc">Todos los casos creados en el periodo, abiertos y ya cerrados</div></div></div>
               <div id="ind-modulo"></div>
             </div>
           </div>
@@ -813,21 +823,21 @@ License: MIT
           </div>
           <div class="grid-2col">
             <div class="panel">
-              <div class="panel-head"><div><h2>Códigos con más reaperturas</h2><div class="desc">SKUs que se repitieron más de una vez en el periodo</div></div></div>
+              <div class="panel-head"><div><h2>Códigos con más reaperturas</h2><div class="desc">SKUs que se repitieron más de una vez en el periodo (cuenta casos abiertos y ya cerrados, no solo los que siguen activos hoy)</div></div></div>
               <div id="ind-skus"></div>
             </div>
             <div class="panel">
-              <div class="panel-head"><div><h2>Cuentas / convenios más afectados</h2></div></div>
+              <div class="panel-head"><div><h2>Cuentas / convenios más afectados</h2><div class="desc">Cuenta casos abiertos y ya cerrados en el periodo</div></div></div>
               <div id="ind-cuentas"></div>
             </div>
           </div>
           <div class="grid-2col">
             <div class="panel">
-              <div class="panel-head"><div><h2>SKU con más pacientes impactados</h2><div class="desc">No es lo mismo un código que se repite que uno que afecta a mucha gente distinta</div></div></div>
+              <div class="panel-head"><div><h2>SKU con más pacientes impactados</h2><div class="desc">No es lo mismo un código que se repite que uno que afecta a mucha gente distinta. No incluye pedidos con fecha a facturar futura poco realista</div></div></div>
               <div id="ind-skus-pacientes"></div>
             </div>
             <div class="panel">
-              <div class="panel-head"><div><h2>Pacientes más afectados</h2><div class="desc">Personas que han estado en más de un caso de faltante</div></div></div>
+              <div class="panel-head"><div><h2>Pacientes más afectados</h2><div class="desc">Personas que han estado en más de un caso de faltante. No incluye pedidos con fecha a facturar futura poco realista</div></div></div>
               <div id="ind-pacientes-top"></div>
             </div>
           </div>
@@ -870,6 +880,8 @@ License: MIT
       <!-- ============ ABASTECIMIENTO ============ -->
       <div class="view" id="view-abast">
         <div class="filters">
+          <div class="field"><label>Bodega</label><div id="ab-ms-bodega"></div></div>
+          <div class="field"><label>Convenio</label><div id="ab-ms-convenio"></div></div>
           <div class="field"><label>Prioritario</label><div class="chips" id="ab-prio-chips">
             <button class="chip active" data-v="">Todos</button><button class="chip" data-v="Si">Sí</button><button class="chip" data-v="No">No</button>
           </div></div>
@@ -941,7 +953,7 @@ License: MIT
     <label>Selecciona una nota</label>
     <select id="bitacora-nota-select"></select>
     <label style="font-size:11.5px;color:var(--muted);font-weight:600;margin-top:10px;">¿Algo más que agregar? (opcional)</label>
-    <textarea id="bitacora-nota-libre" placeholder="Comentario adicional..." style="min-height:60px;"></textarea>
+    <textarea id="bitacora-nota-libre" placeholder="Comentario adicional..." maxlength="500" style="min-height:60px;"></textarea>
     <div class="modal-actions">
       <button class="btn-ghost" id="bitacora-cancel">Cerrar</button>
       <button class="btn-primary" id="bitacora-save">Guardar nota</button>
@@ -974,7 +986,7 @@ License: MIT
     <label>Selecciona una nota</label>
     <select id="bulknote-nota-select"></select>
     <label style="font-size:11.5px;color:var(--muted);font-weight:600;margin-top:10px;">¿Algo más que agregar? (opcional)</label>
-    <textarea id="bulknote-nota-libre" placeholder="Comentario adicional..." style="min-height:60px;"></textarea>
+    <textarea id="bulknote-nota-libre" placeholder="Comentario adicional..." maxlength="500" style="min-height:60px;"></textarea>
     <div class="modal-actions">
       <button class="btn-ghost" id="bulknote-cancel">Cancelar</button>
       <button class="btn-primary" id="bulknote-save">Agregar a todos</button>
@@ -1172,8 +1184,8 @@ function applyFilters(rows, columns, state){
     const fval = state.filters[c.key];
     if(!fval) return true;
     let cellVal = c.filterVal ? c.filterVal(r) : (c.format ? c.format(r) : (r[c.key] ?? ''));
-    cellVal = String(cellVal).replace(/<[^>]+>/g,'').toLowerCase();
-    return cellVal.includes(fval.toLowerCase());
+    cellVal = normalizarTexto(String(cellVal).replace(/<[^>]+>/g,''));
+    return cellVal.includes(normalizarTexto(fval));
   }));
 }
 function applySort(rows, columns, state){
@@ -1184,7 +1196,16 @@ function applySort(rows, columns, state){
   return [...rows].sort((a,b)=>{
     let va = col.sortVal ? col.sortVal(a) : a[col.key];
     let vb = col.sortVal ? col.sortVal(b) : b[col.key];
-    if(va===undefined) va=''; if(vb===undefined) vb='';
+    if(va===undefined || va===null) va=''; if(vb===undefined || vb===null) vb='';
+    // Si ambos valores son numéricos aunque vengan como texto (celda de
+    // Excel mal tipeada, por ejemplo), se comparan como número -- si no,
+    // "10" ordena antes que "9" por comparación de texto.
+    if(va!=='' && vb!=='' && !isNaN(va) && !isNaN(vb)){
+      const na = Number(va), nb = Number(vb);
+      if(na<nb) return -1*dir;
+      if(na>nb) return 1*dir;
+      return 0;
+    }
     if(va<vb) return -1*dir;
     if(va>vb) return 1*dir;
     return 0;
@@ -1211,13 +1232,13 @@ function wireFiltroTablaDetalle(contenedor){
     let debounceFiltro = null;
     function aplicar(){
       const activos = inputs
-        .map(inp=>({ idx: Number(inp.dataset.colIdx), q: inp.value.trim().toLowerCase() }))
+        .map(inp=>({ idx: Number(inp.dataset.colIdx), q: normalizarTexto(inp.value) }))
         .filter(f=>f.q);
       tbody.querySelectorAll('tr').forEach(tr=>{
         const celdas = tr.children;
         const coincide = activos.every(f=>{
           const celda = celdas[f.idx];
-          return celda && celda.textContent.toLowerCase().includes(f.q);
+          return celda && normalizarTexto(celda.textContent).includes(f.q);
         });
         tr.style.display = coincide ? '' : 'none';
       });
@@ -1519,7 +1540,7 @@ document.querySelectorAll('.nav-item').forEach(el=>{
     if(e.key==='Enter' || e.key===' '){ e.preventDefault(); showView(el.dataset.goto); }
   });
 });
-document.querySelectorAll('.cat').forEach(el=> el.addEventListener('click', ()=>{
+function _activarCat(el){
   const sesion = getSesion();
   const permitidos = sesion ? NAV_POR_ROL[sesion.rol] : null;
   if(permitidos && !permitidos.includes(el.dataset.goto)){
@@ -1527,7 +1548,16 @@ document.querySelectorAll('.cat').forEach(el=> el.addEventListener('click', ()=>
     return;
   }
   showView(el.dataset.goto);
-}));
+}
+document.querySelectorAll('.cat').forEach(el=>{
+  el.addEventListener('click', ()=>_activarCat(el));
+  // Igual que los .nav-item: son <div role="button">, el teclado no los
+  // activa solo -- se agrega a mano (Enter/Espacio) para que sean
+  // usables sin mouse.
+  el.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter' || e.key===' '){ e.preventDefault(); _activarCat(el); }
+  });
+});
 
 /* ============================================================
    DATOS REALES — todo viene de la base de datos vía API.
@@ -1538,7 +1568,7 @@ const MODULE_LABELS = {CNG:'CNG', Abastecimiento:'Abastecimiento', Aliados:'Desa
 // Nombre corto de cada bodega, para que la gente se guíe por algo además
 // del número -- Esteban dio esta lista; una bodega que no esté aquí
 // simplemente se muestra solo con su número, sin romper nada.
-const BODEGA_NOMBRES = {'1':'CL Medellín', '19':'CL UdeA', '21':'EPM', '5':'CL Bogotá', '6':'CL Cali', '7':'Barranquilla'};
+const BODEGA_NOMBRES = {'1':'CL Medellín', '19':'CL UdeA', '21':'CL EPM', '5':'CL Bogotá', '6':'CL Cali', '7':'CL Barranquilla'};
 function bodegaLabel(id){
   const nombre = BODEGA_NOMBRES[String(id)];
   return nombre ? `${esc(id)} - ${esc(nombre)}` : esc(id);
@@ -1605,10 +1635,23 @@ function diasBadge(dias){
   const cls = dias>15 ? 'dias-alta' : (dias>7 ? 'dias-media' : 'dias-baja');
   return `<span class="dias-pill ${cls}">${icon('clock',12)} ${dias} ${dias===1?'día':'días'}</span>`;
 }
+const MESES_CORTOS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 function fechaCorta(f){
   if(!f) return '';
-  try{ return new Date(f).toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'}); }
-  catch(e){ return f; }
+  try{
+    // Se lee el año-mes-día directo del texto guardado, sin pasar por un
+    // objeto Date que reinterprete la hora en la zona horaria del
+    // navegador. Casi todas las fechas que llegan del archivo de origen
+    // quedan en "medianoche UTC" -- si se muestran vía Date normal, en
+    // Colombia (UTC-5) se corren un día hacia atrás (27 aparecía como 26).
+    // Leyendo los dígitos directamente, la fecha que se guardó es
+    // exactamente la que se muestra, sin importar la zona horaria.
+    const soloFecha = String(f).slice(0,10);
+    const partes = soloFecha.split('-').map(Number);
+    const [y,m,d] = partes;
+    if(!y || !m || !d) return f;
+    return `${String(d).padStart(2,'0')} ${MESES_CORTOS[m-1]} ${y}`;
+  } catch(e){ return f; }
 }
 function novedadConFecha(caso){
   // "Agotado" sin fecha estimada no es un agotado confirmado -- es un caso
@@ -1982,18 +2025,36 @@ document.getElementById('transfer-save').addEventListener('click', async ()=>{
 
   // 2) De verdad, en segundo plano -- una por una (varias escrituras
   // simultáneas contra el mismo libro de Excel pueden chocar entre sí).
+  // Cada caso se intenta por separado: si uno falla, los demás que ya se
+  // guardaron NO se revierten en pantalla ni se reportan como fallidos --
+  // antes un solo error en el medio del lote deshacía TODO el cambio
+  // visual aunque el resto ya se hubiera guardado bien en el origen real,
+  // lo que además invitaba a reintentar el lote completo y toparse con
+  // errores confusos de "ya fue transferido" para los que sí funcionaron.
   marcarGuardando(true, ids.length>1 ? `Guardando ${ids.length} transferencias...` : 'Guardando transferencia...');
-  try{
-    for(const id of ids){
+  const fallidos = [];
+  for(const id of ids){
+    try{
       await apiPost(`casos/${id}/transferir?debug=true`, {modulo_destino: destino, nota, usuario_id: usuarioId});
+    } catch(errItem){
+      fallidos.push({id: String(id), mensaje: errItem.message||''});
     }
-    invalidarCacheDatos(); // la próxima vez que se visite cada módulo se refresca de verdad, por si acaso
-  } catch(err){
-    revertirTransferenciaOptimista(respaldo);
-    toast(`No se pudo guardar la transferencia — se deshizo el cambio en pantalla. ${err.message||''}`);
-  } finally {
-    marcarGuardando(false);
   }
+  invalidarCacheDatos(); // la próxima vez que se visite cada módulo se refresca de verdad, por si acaso
+  if(fallidos.length){
+    const idsFallidos = new Set(fallidos.map(f=>f.id));
+    revertirTransferenciaOptimista({
+      ...respaldo,
+      movidos: respaldo.movidos.filter(c=>idsFallidos.has(String(c.caso_id))),
+      idsSet: idsFallidos,
+    });
+    if(fallidos.length===ids.length){
+      toast(`No se pudo guardar ninguna transferencia — se deshizo el cambio en pantalla. ${fallidos[0].mensaje}`);
+    } else {
+      toast(`${ids.length-fallidos.length} de ${ids.length} transferencias se guardaron. ${fallidos.length} no se pudieron guardar y se revirtieron en pantalla.`);
+    }
+  }
+  marcarGuardando(false);
 });
 
 function refreshAll(){
@@ -2033,7 +2094,7 @@ async function obtenerResumenConCache(forzar){
 async function recomputeHome(forzar){
   const r = await obtenerResumenConCache(forzar);
   if(!r) return;
-  const hoyStr = new Date().toISOString().slice(0,10);
+  const hoyStr = ldbHoy();
   // Vencidas/Hoy/Mayores a hoy se calculan sobre "fecha_entrega_antigua"
   // (la fecha comprometida de entrega que trae el informe de origen), no
   // sobre la fecha de la novedad -- son cosas distintas: la novedad dice
@@ -2178,7 +2239,7 @@ async function cargarHistoricoResumen(){
   if(desde) qs.push('fecha_desde='+desde);
   if(hasta) qs.push('fecha_hasta='+hasta);
   if(qs.length) path += '?'+qs.join('&');
-  document.getElementById('rs-table').innerHTML = '<div class="empty">Cargando histórico...</div>';
+  document.getElementById('rs-table').innerHTML = skeletonTabla();
   try{
     const filas = await apiGet(path);
     rsHistoricoCache = dedupCasosDeExportacion(filas);
@@ -2274,20 +2335,33 @@ function csvCelda(v){
   if(/^[=+\-@\t\r]/.test(s)) s = "'"+s;
   return `"${s.replace(/"/g,'""')}"`;
 }
+// Para columnas que son identificadores (códigos, cédulas, IDs de bodega) y
+// no cantidades: Excel decide por su cuenta, al ABRIR un CSV, si una celda
+// "parece número" y la convierte -- eso hace que se pierdan ceros a la
+// izquierda o que un número muy largo se muestre en notación científica.
+// Anteponer una comilla simple obliga a Excel a tratar la celda siempre
+// como texto plano, tal cual se ve en la fuente.
+function csvCeldaTexto(v){
+  if(v===null || v===undefined || v==='') return '""';
+  return csvCelda("'"+String(v));
+}
 async function exportarCSV(nombreArchivo, encabezados, filas){
   if(!filas.length){ toast('No hay datos para exportar.'); return; }
-  const escapar = csvCelda;
-  let csv = encabezados.map(h=>escapar(h[0])).join(',') + '\n';
-  filas.forEach(f=>{ csv += encabezados.map(h=>escapar(h[1](f))).join(',') + '\n'; });
-  const ok = await descargarArchivo(nombreArchivo, '\uFEFF'+csv);
+  // h = [etiqueta, fn] o [etiqueta, fn, 'texto'] cuando la columna es un
+  // identificador que Excel NO debe intentar convertir a numero.
+  let csv = encabezados.map(h=>csvCelda(h[0])).join(',') + '\n';
+  filas.forEach(f=>{
+    csv += encabezados.map(h=> h[2]==='texto' ? csvCeldaTexto(h[1](f)) : csvCelda(h[1](f)) ).join(',') + '\n';
+  });
+  const ok = await descargarArchivo(nombreArchivo, csv);
   if(ok) toast(`Exportación generada (${filas.length} registros).`, true);
 }
 function setPresetFecha(dias){
   const hasta = new Date();
   const desde = new Date();
   if(dias!==null) desde.setDate(desde.getDate() - dias);
-  document.getElementById('rs-exp-hasta').value = hasta.toISOString().slice(0,10);
-  document.getElementById('rs-exp-desde').value = dias===null ? '' : desde.toISOString().slice(0,10);
+  document.getElementById('rs-exp-hasta').value = fechaLocalStr(hasta);
+  document.getElementById('rs-exp-desde').value = dias===null ? '' : fechaLocalStr(desde);
 }
 document.getElementById('rs-exp-semana').addEventListener('click', ()=>setPresetFecha(7));
 document.getElementById('rs-exp-mes').addEventListener('click', ()=>setPresetFecha(30));
@@ -2312,10 +2386,10 @@ document.getElementById('rs-exportar').addEventListener('click', async ()=>{
       // ---- Identificación del caso ----
       ['Módulo actual', r=>MODULE_LABELS[r.modulo_actual]||r.modulo_actual],
       ['Estado', r=>r.estado],
-      ['Código', r=>r.codigo],
+      ['Código', r=>r.codigo, 'texto'],
       ['Producto', r=>r.producto],
       ['Genérico', r=>r.generico],
-      ['Bodega', r=>r.bodega_id],
+      ['Bodega', r=>bodegaLabel(r.bodega_id)],
       ['Cuenta/Convenio caso', r=>r.cuenta],
       ['Responsable actual', r=>r.responsable],
       ['Prioridad', r=>r.prioridad],
@@ -2324,7 +2398,7 @@ document.getElementById('rs-exportar').addEventListener('click', async ()=>{
       ['Tipo de novedad actual', r=>r.tipo_novedad],
       ['Novedad original (con la que se creó el caso)', r=>r.novedad_original],
       ['Fecha estimada de novedad', r=>fechaCorta(r.fecha_novedad)],
-      ['Código alternativa', r=>r.codigo_alternativa],
+      ['Código alternativa', r=>r.codigo_alternativa, 'texto'],
       // ---- Trazabilidad: por dónde pasó el caso ----
       ['N° de transferencias', r=>r.num_transferencias],
       ['Ruta de transferencias (módulo origen -> destino, fecha)', r=>r.ruta_transferencias],
@@ -2340,7 +2414,7 @@ document.getElementById('rs-exportar').addEventListener('click', async ()=>{
       ['Días para resolver (ya cerrado)', r=>r.dias_para_resolver],
       ['Días en curso (aún abierto)', r=>r.dias_en_curso],
       // ---- Paciente asociado ----
-      ['Paciente — cédula', r=>r.paciente_nit],
+      ['Paciente — cédula', r=>r.paciente_nit, 'texto'],
       ['Paciente — nombre', r=>r.paciente_nombre],
       ['Paciente — cuenta/convenio', r=>r.paciente_cuenta],
       ['Paciente — # pedido', r=>r.paciente_numero_pedido],
@@ -2416,12 +2490,14 @@ function renderNotasAdmin(notas){
     </tr>`).join('')}</tbody></table></div>
   `).join('');
   holder.querySelectorAll('.nota-toggle').forEach(b=>b.addEventListener('click', async ()=>{
+    if(b.disabled) return; // evita doble clic mientras la solicitud sigue en curso
+    b.disabled = true;
     const activoActual = b.dataset.activo === '1';
     try{
       await apiPatch(`admin/notas/${b.dataset.id}`, {activo: !activoActual});
       toast(activoActual ? 'Nota desactivada.' : 'Nota reactivada.', true);
       refreshNotasAdmin();
-    } catch(err){ toast(err.message || 'No se pudo actualizar la nota.'); }
+    } catch(err){ toast(err.message || 'No se pudo actualizar la nota.'); b.disabled = false; }
   }));
 }
 document.getElementById('notas-agregar').addEventListener('click', async ()=>{
@@ -2456,11 +2532,11 @@ async function refreshUsuariosAdmin(){
   } catch(err){ holder.innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}</div>`; }
 }
 function filtrarUsuariosAdmin(){
-  const q = (document.getElementById('usr-buscar').value||'').trim().toLowerCase();
+  const q = normalizarTexto(document.getElementById('usr-buscar').value||'');
   const rol = document.getElementById('usr-rol-filtro').value;
   const estado = document.getElementById('usr-estado-filtro').value;
   return usuariosCacheAdmin.filter(u=>{
-    if(q && !(`${u.nombre||''} ${u.usuario_login||''}`.toLowerCase().includes(q))) return false;
+    if(q && !normalizarTexto(`${u.nombre||''} ${u.usuario_login||''}`).includes(q)) return false;
     if(rol && u.rol !== rol) return false;
     if(estado!=='' && String(!!u.activo ? 1 : 0) !== estado) return false;
     return true;
@@ -2484,12 +2560,14 @@ function renderUsuariosAdmin(usuarios){
       <td><button class="btn-ghost usr-toggle" data-id="${u.usuario_id}" data-activo="${u.activo?1:0}">${u.activo?'Desactivar':'Reactivar'}</button></td>
     </tr>`).join('')}</tbody></table></div>`;
   holder.querySelectorAll('.usr-toggle').forEach(b=>b.addEventListener('click', async ()=>{
+    if(b.disabled) return; // evita doble clic mientras la solicitud sigue en curso
+    b.disabled = true;
     const activoActual = b.dataset.activo === '1';
     try{
       await apiPatch(`admin/usuarios/${b.dataset.id}`, {activo: !activoActual});
       toast(activoActual ? 'Usuario desactivado.' : 'Usuario reactivado.', true);
       refreshUsuariosAdmin();
-    } catch(err){ toast(err.message || 'No se pudo actualizar el usuario.'); }
+    } catch(err){ toast(err.message || 'No se pudo actualizar el usuario.'); b.disabled = false; }
   }));
 }
 document.getElementById('usr-crear').addEventListener('click', async ()=>{
@@ -2523,7 +2601,7 @@ function barraHtml(label, valor, maximo, colores){
   return `<div class="chart-bar-row">
     <div class="chart-bar-label" title="${esc(label)}">${esc(label)}</div>
     <div class="chart-bar-track"><div class="chart-bar-fill" style="width:0%;${estiloColor}" data-w="${pct}"></div></div>
-    <div class="chart-bar-val">${valor}</div>
+    <div class="chart-bar-val">${formatoNum(valor)}</div>
   </div>`;
 }
 function animarBarras(contenedor){
@@ -2553,13 +2631,18 @@ function tendenciaHtml(actual, anterior, colorPositivoEsSubir){
 function renderIndicadoresKpis(d){
   const g = d.general;
   const comp = d.comparacion_periodo_anterior;
+  if(!g.total_casos){
+    document.getElementById('ind-kpis').innerHTML = `<div class="empty" style="padding:22px 4px;">No hay casos creados en el periodo seleccionado. Ajusta el rango de fechas o usa "Todo el histórico".</div>`;
+    document.getElementById('ind-comparacion-info').style.display = 'none';
+    return;
+  }
   const kpis = [
-    ['Casos creados', g.total_casos, comp ? tendenciaHtml(g.total_casos, comp.total_casos, null) : 'en el periodo'],
-    ['Cerrados', g.casos_cerrados, comp ? tendenciaHtml(g.casos_cerrados, comp.casos_cerrados, true) : `${g.total_casos? Math.round(g.casos_cerrados/g.total_casos*100):0}% del total`],
-    ['Abiertos', g.casos_abiertos, 'siguen en gestión'],
+    ['Casos creados', formatoNum(g.total_casos), comp ? tendenciaHtml(g.total_casos, comp.total_casos, null) : 'en el periodo'],
+    ['Cerrados', formatoNum(g.casos_cerrados), comp ? tendenciaHtml(g.casos_cerrados, comp.casos_cerrados, true) : `${g.total_casos? Math.round(g.casos_cerrados/g.total_casos*100):0}% del total`],
+    ['Abiertos', formatoNum(g.casos_abiertos), 'siguen en gestión'],
     ['Días prom. resolución', g.dias_promedio_resolucion!=null ? g.dias_promedio_resolucion.toFixed(1) : '—', 'de casos ya cerrados'],
-    ['Prioritarios', g.total_prioritarios, 'marcados urgentes'],
-    ['Pacientes afectados', d.pacientes_afectados, 'personas distintas'],
+    ['Prioritarios', formatoNum(g.total_prioritarios), 'marcados urgentes'],
+    ['Pacientes afectados', formatoNum(d.pacientes_afectados), 'personas distintas'],
   ];
   document.getElementById('ind-kpis').innerHTML = `<div class="ind-kpi-grid">${kpis.map(k=>`
     <div class="kpi total"><div class="lbl">${k[0]}</div><div class="val">${k[1]}</div><div class="trend">${k[2]}</div></div>
@@ -2590,7 +2673,7 @@ function svgDonut(data, opts){
   return `<svg width="${size}" height="${size}" viewBox="0 0 168 168">
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#EEF1F4" stroke-width="${strokeW}"/>
     ${segmentos}
-    <text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="26" font-weight="800" fill="#1E2433">${total}</text>
+    <text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="26" font-weight="800" fill="#1E2433">${formatoNum(total)}</text>
     <text x="${cx}" y="${cy+17}" text-anchor="middle" font-size="9.5" fill="#94A3B8" letter-spacing=".5">TOTAL</text>
   </svg>`;
 }
@@ -2639,6 +2722,13 @@ function renderIndicadoresTendencia(tendencia){
   const holder = document.getElementById('ind-tendencia');
   if(!tendencia.length){ holder.innerHTML = '<div class="empty">Sin casos creados en este periodo.</div>'; return; }
   const datos = tendencia.map(t=>({label: fechaCorta(t.fecha), value: t.total}));
+  // Con un solo día de datos, un gráfico de línea/área no tiene nada que
+  // trazar (queda un punto suelto casi invisible) -- se muestra el dato
+  // como texto en vez de un SVG vacío que parece un error.
+  if(datos.length===1){
+    holder.innerHTML = `<div class="empty" style="text-align:left;">${formatoNum(datos[0].value)} caso(s) nuevo(s) el ${datos[0].label} — solo hay datos de un día en el periodo seleccionado.</div>`;
+    return;
+  }
   const maxEtiquetas = 10;
   const paso = Math.max(1, Math.ceil(datos.length/maxEtiquetas));
   const etiquetas = datos.map((d,i)=> (i%paso===0 || i===datos.length-1) ? d.label : '');
@@ -2668,7 +2758,7 @@ function renderIndicadoresModulo(porModulo){
       <div class="donut-legend-item">
         <span class="donut-dot" style="background:${d.color};"></span>
         <span class="donut-legend-label">${esc(d.label)}</span>
-        <span class="donut-legend-val">${d.value} <em>(${Math.round(d.value/total*100)}%)</em></span>
+        <span class="donut-legend-val">${formatoNum(d.value)} <em>(${Math.round(d.value/total*100)}%)</em></span>
       </div>`).join('')}</div>
   </div>`;
   activarDonut(holder);
@@ -2785,6 +2875,41 @@ function renderIndicadoresPacientesTop(pacientes){
     <div class="sku-row"><div><strong>${p.nombre?esc(p.nombre):'Sin nombre'}</strong> &middot; CC ${esc(p.nit_paciente)}</div><span class="sku-badge ${claseSeveridad(p.casos_distintos,3,5)}">${p.casos_distintos}&times; afectado</span></div>
   `).join('')}</div>`;
 }
+const NIVEL_RIESGO_CLASE = {Alto:'b-agotado', Medio:'b-invima', Bajo:'b-gestionado'};
+function renderIndicadoresSkusRiesgo(skus){
+  const holder = document.getElementById('ind-skus-riesgo');
+  if(!skus || !skus.length){ holder.innerHTML = '<div class="empty">Ningún código muestra señales de riesgo en este periodo — buena señal.</div>'; return; }
+  holder.innerHTML = `<div class="sku-list">${skus.map(s=>{
+    const señales = [];
+    if(s.casos_abiertos_ahora) señales.push('sigue abierto hoy');
+    if(s.acelerando) señales.push(`se está reabriendo más rápido (antes cada ${s.brecha_promedio_anterior_dias}d, ahora ${s.ultima_brecha_dias}d)`);
+    if(s.dias_abierto_max>15) señales.push(`llegó a estar ${s.dias_abierto_max}d abierto`);
+    return `<div class="sku-row sku-row-click" data-codigo="${esc(s.codigo)}" title="Ver detalle de este código" tabindex="0" style="align-items:flex-start;">
+      <div style="white-space:normal;">
+        <strong>${esc(s.codigo)}</strong> &middot; ${esc(s.producto||'')}
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;white-space:normal;">${s.veces}&times; reabierto en el historial completo${señales.length ? ' · '+esc(señales.join(' · ')) : ''}</div>
+      </div>
+      <span class="badge ${NIVEL_RIESGO_CLASE[s.nivel]}" style="flex:0 0 auto;">${esc(s.nivel)}</span>
+    </div>`;
+  }).join('')}</div>`;
+  holder.querySelectorAll('.sku-row-click').forEach(row=>{
+    row.addEventListener('click', ()=> abrirDetalleSku(row.dataset.codigo));
+    row.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); abrirDetalleSku(row.dataset.codigo); } });
+  });
+}
+function renderIndicadoresBodegasAtraso(bodegas){
+  const holder = document.getElementById('ind-bodegas-atraso');
+  if(!bodegas || !bodegas.length){ holder.innerHTML = '<div class="empty">Ninguna bodega se aleja del promedio de las demás en este periodo — buena señal.</div>'; return; }
+  holder.innerHTML = `<div class="sku-list">${bodegas.map(b=>`
+    <div class="sku-row" style="align-items:flex-start;">
+      <div style="white-space:normal;">
+        <strong>${bodegaLabel(b.bodega_id)}</strong>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;white-space:normal;">${b.dias_promedio.toFixed(1)}d promedio abierto sobre ${formatoNum(b.casos_abiertos)} caso(s) activo(s) &middot; el promedio de las demás bodegas es ${b.promedio_general_bodegas.toFixed(1)}d</div>
+      </div>
+      <span class="badge b-agotado" style="flex:0 0 auto;">+${b.desviacion_pct}%</span>
+    </div>
+  `).join('')}</div>`;
+}
 function renderIndicadoresCargaModulo(carga){
   const holder = document.getElementById('ind-carga-modulo');
   if(!carga.length){ holder.innerHTML = '<div class="empty">Sin datos.</div>'; return; }
@@ -2809,6 +2934,8 @@ async function refreshIndicadores(){
   } catch(err){ toast(err.message || 'No se pudieron cargar los indicadores.'); return; }
   const d = indicadoresCache;
   renderIndicadoresKpis(d);
+  renderIndicadoresSkusRiesgo(d.skus_riesgo);
+  renderIndicadoresBodegasAtraso(d.bodegas_atraso_anomalo);
   renderIndicadoresTendencia(d.tendencia_diaria);
   renderIndicadoresTipo(d.por_tipo_novedad);
   renderIndicadoresModulo(d.por_modulo);
@@ -2838,11 +2965,27 @@ document.getElementById('ind-exportar').addEventListener('click', async ()=>{
     {seccion:'General', dato:'Pacientes afectados', valor:d.pacientes_afectados},
     ...d.por_tipo_novedad.map(t=>({seccion:'Por tipo de novedad', dato:t.tipo_novedad, valor:t.total})),
     ...d.por_modulo.map(m=>({seccion:'Por módulo', dato:MODULE_LABELS[m.modulo_actual]||m.modulo_actual, valor:m.total})),
-    ...d.skus_recurrentes.map(s=>({seccion:'Códigos reabiertos', dato:`${s.codigo} (${s.producto||''})`, valor:s.veces})),
-    ...d.top_cuentas.map(c=>({seccion:'Cuentas más afectadas', dato:c.cuenta, valor:c.total})),
-    ...d.tendencia_diaria.map(t=>({seccion:'Tendencia diaria', dato:t.fecha, valor:t.total})),
+    ...d.skus_recurrentes.map(s=>({seccion:'Códigos con más reaperturas (abiertos y cerrados)', dato:`${s.codigo} (${s.producto||''})`, valor:s.veces})),
+    ...d.top_cuentas.map(c=>({seccion:'Cuentas/convenios con más casos (abiertos y cerrados)', dato:c.cuenta, valor:c.total})),
+    ...d.tendencia_diaria.map(t=>({seccion:'Tendencia diaria (casos nuevos)', dato:fechaCorta(t.fecha), valor:t.total})),
     ...d.transferencias_flujo.map(f=>({seccion:'Transferencias', dato:`${f.modulo_origen} -> ${f.modulo_destino}`, valor:f.total})),
+    ...d.skus_mas_pacientes.map(s=>({seccion:'Códigos con más pacientes impactados', dato:`${s.codigo} (${s.producto||''})`, valor:s.pacientes_distintos})),
+    ...d.pacientes_mas_afectados.map(p=>({seccion:'Pacientes con más casos', dato:`${p.nit_paciente} - ${p.nombre||''}`, valor:p.casos_distintos})),
+    ...d.carga_por_modulo.map(m=>({seccion:'Carga y atraso por módulo (solo casos activos)', dato:`${MODULE_LABELS[m.modulo_actual]||m.modulo_actual} — unds. pendientes`, valor:m.unidades_pendientes})),
+    ...d.carga_por_modulo.map(m=>({seccion:'Carga y atraso por módulo (solo casos activos)', dato:`${MODULE_LABELS[m.modulo_actual]||m.modulo_actual} — días promedio abierto`, valor:m.dias_promedio_abierto!=null?m.dias_promedio_abierto.toFixed(1):''})),
+    ...d.notas_sin_novedad_clara.map(n=>({seccion:'Sin novedad clara — notas de gestión usadas', dato:n.nota, valor:n.total})),
+    {seccion:'Sin novedad clara — notas de gestión usadas', dato:'Total casos "sin novedad clara" en el periodo', valor:d.sin_novedad_clara_total},
+    {seccion:'Sin novedad clara — notas de gestión usadas', dato:'De esos, con nota estándar registrada', valor:d.sin_novedad_clara_con_nota_estandar},
+    ...(d.skus_riesgo||[]).map(s=>({seccion:'SKUs en riesgo de reapertura', dato:`${s.codigo} (${s.producto||''}) — nivel ${s.nivel}`, valor:`score ${s.score}, ${s.veces}x reabierto, ${s.casos_abiertos_ahora} activo(s) ahora${s.acelerando?', acelerando':''}`})),
+    ...(d.bodegas_atraso_anomalo||[]).map(b=>({seccion:'Bodegas con atraso fuera de lo normal', dato:bodegaLabel(b.bodega_id).replace(/<[^>]+>/g,''), valor:`${b.dias_promedio.toFixed(1)}d promedio (+${b.desviacion_pct}% vs. promedio de ${b.promedio_general_bodegas.toFixed(1)}d)`})),
   ];
+  if(d.comparacion_periodo_anterior){
+    const c = d.comparacion_periodo_anterior;
+    filas.push(
+      {seccion:'Comparación con periodo anterior', dato:`Periodo anterior (${fechaCorta(c.fecha_desde)} a ${fechaCorta(c.fecha_hasta)}) — total casos`, valor:c.total_casos},
+      {seccion:'Comparación con periodo anterior', dato:'Periodo anterior — cerrados', valor:c.casos_cerrados},
+    );
+  }
   await exportarCSV('indicadores_faltantes.csv', [
     ['Sección', f=>f.seccion], ['Dato', f=>f.dato], ['Valor', f=>f.valor],
   ], filas);
@@ -2884,7 +3027,7 @@ function cngFilteredRows(){
   });
 }
 function updateCngKpis(rows){
-  const hoyStr = new Date().toISOString().slice(0,10);
+  const hoyStr = ldbHoy();
   document.getElementById('cng-total').textContent = formatoNum(rows.length);
   // Vencidas/Hoy/Programadas se calculan sobre "fecha_entrega_antigua"
   // (la fecha comprometida de entrega), no sobre la fecha de la novedad.
@@ -3002,10 +3145,14 @@ function renderCng(){
       // guardada, sin tener que volver a pedir todo el detalle a Graph.
       const casoPorId = {};
       m.casos.forEach(c=>casoPorId[c.caso_id]=c);
-      m._pacientesCombinados = previa._pacientesCombinados.map(({caso, p})=>{
-        const casoFresco = casoPorId[caso.caso_id];
-        return {caso: casoFresco ? {...caso, ...casoFresco} : caso, p};
-      });
+      // Si un caso ya NO pertenece más a esta molécula (por ejemplo, se
+      // transfirió a otro módulo y salió del filtro de CNG) se descarta su
+      // fila de paciente en vez de conservar el caso viejo -- si no, el
+      // detalle expandido seguía mostrando pacientes de un caso que ya no
+      // está aquí.
+      m._pacientesCombinados = previa._pacientesCombinados
+        .filter(({caso})=> casoPorId[caso.caso_id])
+        .map(({caso, p})=>({caso: {...caso, ...casoPorId[caso.caso_id]}, p}));
     }
     cngMoleculasPorCodigo[m.codigo]=m;
   });
@@ -3140,15 +3287,28 @@ async function refreshCng(silencioso){
    continuas (como el Excel), no en tarjetas apiladas.
    ============================================================ */
 let abPrioFilter = '', abSelected = new Set();
+let abBodegaSet = new Set(), abConvenioSet = new Set();
 document.querySelectorAll('#ab-prio-chips .chip').forEach(c=>c.addEventListener('click',()=>{
   document.querySelectorAll('#ab-prio-chips .chip').forEach(x=>x.classList.remove('active'));
   c.classList.add('active'); abPrioFilter = c.dataset.v; renderAbast();
 }));
 document.getElementById('ab-consultar').addEventListener('click', refreshAbast);
+// Igual que en CNG y Aliados -- Abastecimiento es, de los tres módulos, el
+// que suele tener más registros, así que era justo el que más necesitaba
+// poder acotar por bodega/convenio (antes solo tenía el filtro de
+// prioritario, inconsistente con los otros dos módulos).
+function renderAbFiltrosBodegaConvenio(){
+  const bodegas = [...new Set(casosAbast.map(r=>String(r.bodega_id)))].sort();
+  const convenios = [...new Set(casosAbast.flatMap(r=>conveniosDe(r.cuenta)))].sort();
+  multiSelect('ab-ms-bodega', 'Bodega', bodegas, abBodegaSet, renderAbast, bodegaLabel);
+  multiSelect('ab-ms-convenio', 'Convenio', convenios, abConvenioSet, renderAbast);
+}
 function abFilteredRows(){
   return casosAbast.filter(r=>{
     if(abPrioFilter==='Si' && !r.prioritario) return false;
     if(abPrioFilter==='No' && r.prioritario) return false;
+    if(abBodegaSet.size && !abBodegaSet.has(String(r.bodega_id))) return false;
+    if(abConvenioSet.size && !conveniosDe(r.cuenta).some(c=>abConvenioSet.has(c))) return false;
     return true;
   });
 }
@@ -3172,7 +3332,7 @@ function updateAbastKpis(rows){
   document.getElementById('ab-traslado').textContent = formatoNum(rows.filter(r=> esNumeroConValor(r.traslado) || esNumeroConValor(r.solicitud_traslado)).length);
   // Igual que en CNG/Panel general: vencidas/hoy/mayores se calculan sobre
   // la columna "fecha entrega antigua", no sobre fecha_novedad.
-  const hoyStrAb = new Date().toISOString().slice(0,10);
+  const hoyStrAb = ldbHoy();
   const conFechaAb = rows.filter(r=>r.fecha_entrega_antigua);
   document.getElementById('ab-vencidas').textContent = formatoNum(conFechaAb.filter(r=>r.fecha_entrega_antigua.slice(0,10) < hoyStrAb).length);
   document.getElementById('ab-hoy').textContent = formatoNum(conFechaAb.filter(r=>r.fecha_entrega_antigua.slice(0,10) === hoyStrAb).length);
@@ -3243,33 +3403,35 @@ document.getElementById('ab-bulk-transfer').addEventListener('click', ()=>{
   openTransfer([...abSelected], 'Abastecimiento', `${abSelected.size} producto(s) seleccionados`);
 });
 document.getElementById('ab-limpiar').addEventListener('click', ()=>{
-  abPrioFilter=''; abSelected.clear();
+  abPrioFilter=''; abSelected.clear(); abBodegaSet.clear(); abConvenioSet.clear();
   document.querySelectorAll('#ab-prio-chips .chip').forEach(x=>x.classList.remove('active'));
   document.querySelector('#ab-prio-chips .chip[data-v=""]').classList.add('active');
   reiniciarEstadoTabla('ab-table');
+  renderAbFiltrosBodegaConvenio();
   renderAbast();
   toast('Filtros de abastecimiento restablecidos.', true);
 });
-document.getElementById('ab-exportar').addEventListener('click', ()=>{
+document.getElementById('ab-exportar').addEventListener('click', async ()=>{
   const rows = abFilteredRows();
   if(!rows.length){ toast('No hay registros para exportar con los filtros actuales.'); return; }
-  const encabezadosAb = ['Prioritario','Bodega','Codigo','Producto','Division','CantPedido','TotalNecesidad','Pendiente','Traslado','DiasAbierto'];
-  let csv = encabezadosAb.map(csvCelda).join(',') + '\n';
-  rows.forEach(r=>{
-    csv += [r.prioritario?'Si':'No', r.bodega_id, r.codigo, r.producto||'', r.division||'', r.cant_pedido??'', r.total_necesidad??'', r.pendiente??'', r.traslado??'', r.dias_abierto]
-      .map(csvCelda).join(',') + '\n';
-  });
-  const blob = new Blob(['﻿'+csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'abastecimiento_faltantes.csv';
-  a.click();
-  toast('Exportación generada ('+rows.length+' registros).', true);
+  await exportarCSV('abastecimiento_faltantes.csv', [
+    ['Prioritario', r=>r.prioritario?'Sí':'No'],
+    ['Bodega', r=>bodegaLabel(r.bodega_id)],
+    ['Código', r=>r.codigo, 'texto'],
+    ['Producto', r=>r.producto||''],
+    ['División', r=>r.division||''],
+    ['Cant. pedido', r=>r.cant_pedido??''],
+    ['Total necesidad', r=>r.total_necesidad??''],
+    ['Pendiente', r=>r.pendiente??''],
+    ['Traslado', r=>r.traslado??''],
+    ['Días abierto', r=>r.dias_abierto],
+  ], rows);
 });
 async function refreshAbast(silencioso){
   if(!silencioso) document.getElementById('ab-table').innerHTML = skeletonTabla();
   try{ casosAbast = await cargarModulo('Abastecimiento'); }
   catch(err){ toast(err.message || 'No se pudo cargar Abastecimiento.'); if(!silencioso) casosAbast = []; }
+  renderAbFiltrosBodegaConvenio();
   renderAbast();
   marcarCacheFresca('abast');
 }
@@ -3398,7 +3560,7 @@ function updateAlKpis(rows){
   document.getElementById('al-sinbit').textContent = formatoNum(rows.filter(r=>!r.tiene_bitacora).length);
   // Igual que en CNG/Abastecimiento/Panel general: vencidas/hoy/mayores
   // sobre "fecha entrega antigua".
-  const hoyStrAl = new Date().toISOString().slice(0,10);
+  const hoyStrAl = ldbHoy();
   const conFechaAl = rows.filter(r=>r.fecha_entrega_antigua);
   document.getElementById('al-vencidas').textContent = formatoNum(conFechaAl.filter(r=>r.fecha_entrega_antigua.slice(0,10) < hoyStrAl).length);
   document.getElementById('al-hoy').textContent = formatoNum(conFechaAl.filter(r=>r.fecha_entrega_antigua.slice(0,10) === hoyStrAl).length);
@@ -3712,10 +3874,6 @@ async function iniciarSesionMicrosoft(){
   // en completarLoginTrasRedirect() cuando Microsoft nos devuelve aquí.
   await msalApp.loginRedirect({ scopes: ['User.Read', 'Files.ReadWrite'] });
 }
-function cerrarSesionMicrosoft(){
-  if(msalApp && msalCuenta) msalApp.logoutRedirect({ account: msalCuenta }).catch(()=>{});
-  msalCuenta = null;
-}
 
 async function obtenerTokenGraph(){
   const solicitud = { scopes: ['User.Read', 'Files.ReadWrite'], account: msalCuenta };
@@ -3723,8 +3881,20 @@ async function obtenerTokenGraph(){
     const r = await msalApp.acquireTokenSilent(solicitud);
     return r.accessToken;
   } catch(e){
-    const r = await msalApp.acquireTokenPopup(solicitud);
-    return r.accessToken;
+    // La renovación silenciosa falló (el token expiró y hace falta que la
+    // persona vuelva a autenticarse). Se usa el mismo mecanismo de
+    // REDIRECCIÓN de página completa que el login inicial -- nunca un
+    // popup, que en este flujo casi siempre queda bloqueado por el
+    // navegador y dejaba un error crudo de MSAL sin traducir llegando a
+    // la pantalla. acquireTokenRedirect navega fuera de la página; al
+    // volver, completarLoginTrasRedirect() retoma todo con normalidad.
+    try{
+      await msalApp.acquireTokenRedirect(solicitud);
+      return null; // no hay código después de esto -- la página ya navegó
+    } catch(e2){
+      console.error('No se pudo renovar la sesión con Microsoft:', e2);
+      throw new Error('Tu sesión con Microsoft expiró. Actualiza la página para volver a iniciar sesión.');
+    }
   }
 }
 /* ---------- Reintentos automáticos ----------
@@ -3780,9 +3950,20 @@ async function graphFetch(path, opciones){
       }
       const cuerpo = await r.json().catch(()=>({}));
       const msgBase = (cuerpo.error && cuerpo.error.message) || `Microsoft Graph respondió con error ${r.status}`;
-      if(r.status === 423) throw new Error('El sistema está siendo actualizado por otra persona en este momento. Intenta de nuevo en unos segundos.');
-      if(r.status === 429) throw new Error('Hay demasiadas solicitudes al mismo tiempo (varias personas trabajando a la vez). Intenta de nuevo en unos segundos.');
-      throw new Error(msgBase);
+      // El mensaje crudo de Graph (nombres de tabla, rutas internas, etc.)
+      // queda solo en la consola para quien esté diagnosticando y en
+      // err.raw (lo sigue usando graphFetchWB para detectar sesión
+      // expirada) -- a la persona usando la app le llega un mensaje
+      // genérico y profesional según el tipo de error, nunca el detalle
+      // interno de Graph.
+      console.error(`Graph ${r.status} en ${url}:`, msgBase);
+      const lanzar = (texto)=>{ const e = new Error(texto); e.raw = msgBase; e.status = r.status; throw e; };
+      if(r.status === 423) lanzar('El sistema está siendo actualizado por otra persona en este momento. Intenta de nuevo en unos segundos.');
+      if(r.status === 429) lanzar('Hay demasiadas solicitudes al mismo tiempo (varias personas trabajando a la vez). Intenta de nuevo en unos segundos.');
+      if(r.status === 401 || r.status === 403) lanzar('No tienes permisos suficientes para completar esta acción.');
+      if(r.status === 404) lanzar('No se encontró la información solicitada. Puede que ya haya cambiado -- intenta actualizar la página.');
+      if(r.status === 400 || r.status === 422) lanzar('Los datos enviados no son válidos. Revisa la información e intenta de nuevo.');
+      lanzar('No se pudo completar la operación. Intenta de nuevo en unos minutos o comunícate con el administrador si el problema persiste.');
     }
     if(r.status === 204) return null;
     return r.json();
@@ -3821,8 +4002,11 @@ async function graphFetchWB(driveId, itemId, path, opciones){
   try{
     return await graphFetch(path, {...opciones, headers});
   } catch(e){
-    // Si la sesión guardada ya expiró/no es válida, se crea una nueva y se reintenta una vez.
-    if(sesionId && /InvalidSession|SessionNotFound/i.test(e.message||'')){
+    // Si la sesión guardada ya expiró/no es válida, se crea una nueva y se
+    // reintenta una vez. Se revisa e.raw (el mensaje crudo de Graph) y no
+    // e.message, porque graphFetch ahora sanitiza e.message antes de que
+    // llegue a la persona usuaria -- ver comentario ahí.
+    if(sesionId && /InvalidSession|SessionNotFound/i.test(e.raw||e.message||'')){
       delete SP_SESIONES[itemId];
       const nueva = await _sesionExcel(driveId, itemId);
       const headers2 = {...(opciones.headers||{})};
@@ -3902,10 +4086,17 @@ function filaEstaVacia(valoresCrudos){
 }
 /* Igual que graphFetch, pero sigue @odata.nextLink -- para listados fuera
    del libro (por ejemplo, los archivos dentro de la carpeta "Historial"). */
+// Tope de páginas por si Graph alguna vez devolviera un @odata.nextLink mal
+// formado que apunte otra vez a una página ya leída -- sin este tope, eso
+// dejaría la pestaña en un bucle infinito acumulando memoria en silencio
+// en vez de fallar con un error claro.
+const GRAPH_PAGINAS_MAX = 500;
 async function graphFetchPaginado(path){
   let valores = [];
   let siguiente = path;
+  let paginas = 0;
   while(siguiente){
+    if(++paginas > GRAPH_PAGINAS_MAX) throw new Error('Se alcanzó el límite de páginas al leer datos de Microsoft. Comunícate con el administrador.');
     const r = await graphFetch(siguiente);
     valores = valores.concat(r.value || []);
     siguiente = r['@odata.nextLink'] || null;
@@ -3924,7 +4115,9 @@ async function graphFetchWBPaginado(driveId, itemId, path, opciones){
   let valores = [];
   let siguiente = path;
   let primeraVuelta = true;
+  let paginas = 0;
   while(siguiente){
+    if(++paginas > GRAPH_PAGINAS_MAX) throw new Error('Se alcanzó el límite de páginas al leer datos de Microsoft. Comunícate con el administrador.');
     const r = primeraVuelta
       ? await graphFetchWB(driveId, itemId, siguiente, opciones)
       : await graphFetch(siguiente); // nextLink ya trae la sesión codificada en la URL de Graph
@@ -4005,14 +4198,39 @@ async function patchFilaIndice(tabla, filaConIndice, cambios, opciones){ return 
 
 function uid(){ return crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(36).slice(2); }
 function ldbAhora(){ return new Date().toISOString(); }
-function ldbHoy(){ return new Date().toISOString().slice(0,10); }
+// "Hoy" en el calendario LOCAL de quien usa la app, no en UTC. Colombia
+// está detrás de UTC (UTC-5), así que de 7pm a medianoche hora local,
+// new Date().toISOString() ya cayó en el día siguiente en UTC -- sin este
+// ajuste, "vencidas/hoy/mayor a hoy" y los rangos de fecha por defecto se
+// corrían un día durante esas horas. Se calcula restando el offset de
+// zona horaria del navegador antes de leer la fecha en formato ISO.
+function fechaLocalStr(fecha){
+  const d = fecha instanceof Date ? fecha : new Date(fecha);
+  const local = new Date(d.getTime() - d.getTimezoneOffset()*60000);
+  return local.toISOString().slice(0,10);
+}
+function ldbHoy(){ return fechaLocalStr(new Date()); }
 function ldbDiasEntre(a,b){ if(!a||!b) return null; return Math.round((new Date(b.slice(0,10))-new Date(a.slice(0,10)))/86400000); }
 function ldbDiasAbierto(f){ return f ? Math.max(0, ldbDiasEntre(f, ldbAhora())) : 0; }
-function ldbPrioridad(c,d){ if(c.prioritario && d>10) return 'Alta'; if(c.prioritario || d>15) return 'Alta'; if(d>7) return 'Media'; return 'Baja'; }
+// (antes había una condición redundante acá: "prioritario && d>10" nunca
+// podía dispararse por su cuenta porque la siguiente línea ya cubre
+// cualquier caso prioritario sin importar los días -- se quitó, el
+// resultado es exactamente el mismo, solo más claro de leer.)
+function ldbPrioridad(c,d){ if(c.prioritario || d>15) return 'Alta'; if(d>7) return 'Media'; return 'Baja'; }
 function ldbMesDe(fechaISO){ return (fechaISO||ldbHoy()).slice(0,7); }
 // Corta a YYYY-MM-DD de forma segura -- nunca truena si la fecha viene
 // vacía/null (pasa cuando Excel devuelve una celda vacía como null).
 function f10(f){ return f ? String(f).slice(0,10) : ''; }
+// Igual que f10(), pero para timestamps REALES en UTC (fecha_creacion,
+// fecha de una transferencia, etc. -- todo lo que se guarda con
+// ldbAhora()), cuando se van a agrupar/comparar por "día". f10() a secas
+// solo es seguro para fechas que YA son de calendario (fecha_entrega_antigua,
+// fecha_a_facturar): un timestamp real cortado con f10() cae en el día UTC,
+// que para alguien en Colombia (UTC-5) corre un día de más entre las 7pm y
+// la medianoche hora local -- por eso "casos nuevos por día", "transferencias
+// de hoy" y los rangos de fecha en Indicadores/exportar usaban f10() sobre
+// fecha_creacion y se veían desfasados justo en esas horas.
+function f10Local(f){ return f ? fechaLocalStr(f) : ''; }
 function ldbMesesEntre(mesInicio, mesFin){
   const meses = [];
   let [y,m] = mesInicio.split('-').map(Number);
@@ -4105,10 +4323,29 @@ async function ldbTodosCasosEnriquecidos(){
     const f = f10(c.fecha_entrega_antigua);
     if(f && f > maxFechaEntregaAntigua) maxFechaEntregaAntigua = f;
   });
+  // Agrupar pacientes/transferencias por caso_id EN UNA SOLA PASADA cada uno
+  // (Map), en vez de un .filter() completo de la tabla entera por cada caso
+  // -- con cientos/miles de casos y pacientes ese doble bucle (O(casos ×
+  // pacientes)) se vuelve notoriamente lento; agrupar así es O(casos +
+  // pacientes) y da exactamente el mismo resultado.
+  const pacientesPorCaso = new Map();
+  pacientes.forEach(p=>{
+    if(!p.activo) return;
+    if(maxFechaEntregaAntigua && f10(p.fecha_a_facturar) && f10(p.fecha_a_facturar) > maxFechaEntregaAntigua) return;
+    const k = String(p.caso_id);
+    if(!pacientesPorCaso.has(k)) pacientesPorCaso.set(k, []);
+    pacientesPorCaso.get(k).push(p);
+  });
+  const transferenciasPorCaso = new Map();
+  transferencias.forEach(t=>{
+    const k = String(t.caso_id);
+    if(!transferenciasPorCaso.has(k)) transferenciasPorCaso.set(k, []);
+    transferenciasPorCaso.get(k).push(t);
+  });
   return casos.map(c=>{
-    const pacientesCaso = pacientes.filter(p=>String(p.caso_id)===String(c.caso_id) && p.activo &&
-      (!maxFechaEntregaAntigua || !f10(p.fecha_a_facturar) || f10(p.fecha_a_facturar) <= maxFechaEntregaAntigua));
-    const transferenciasCaso = transferencias.filter(t=>String(t.caso_id)===String(c.caso_id));
+    const k = String(c.caso_id);
+    const pacientesCaso = pacientesPorCaso.get(k) || [];
+    const transferenciasCaso = transferenciasPorCaso.get(k) || [];
     const diasAbierto = c.activo ? ldbDiasAbierto(c.fecha_creacion) : (c.fecha_cierre ? ldbDiasEntre(c.fecha_creacion, c.fecha_cierre) : 0);
     const ultimaTransferencia = transferenciasCaso.length ? transferenciasCaso.reduce((a,b)=>a.fecha>b.fecha?a:b).fecha : null;
     const ultimaBitacora = c.ultima_bitacora_fecha || null;
@@ -4162,8 +4399,15 @@ async function ldbObtenerCaso(casoId){
    deja un resumen directo en la fila del caso (solo notas reales,
    nunca las automáticas de transferencia) para que las listas no
    tengan que abrir ningún archivo mensual. ---------- */
+// Tope generoso para el comentario libre -- a diferencia de las notas
+// predefinidas (60 caracteres, pensadas para tabular patrones), el
+// comentario libre es para detalle, pero sin límite podría inflar sin
+// control la fila del caso (que guarda un resumen directo de la última
+// nota) y volver más pesadas las vistas de lista que lo muestran en línea.
+const NOTA_LIBRE_MAX = 500;
 async function ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, usuarioId, pacienteRowId, esAutomatica, opciones){
   if(!notaPredefinidaId && !(notaLibre && notaLibre.trim())) throw new Error('Debes indicar una nota predefinida o escribir una nota libre.');
+  if(notaLibre && notaLibre.length > NOTA_LIBRE_MAX) throw new Error(`El comentario libre no puede superar ${NOTA_LIBRE_MAX} caracteres.`);
   const ahora = ldbAhora();
   await agregarBitacoraEnMes(ldbMesDe(ahora), {
     bitacora_id: uid(), caso_id: casoId, paciente_row_id: pacienteRowId||'', modulo,
@@ -4189,13 +4433,41 @@ async function ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, 
 async function ldbAgregarBitacoraLote(casoIds, modulo, notaPredefinidaId, notaLibre, usuarioId){
   if(!casoIds || !casoIds.length) throw new Error('No se enviaron casos para la nota masiva.');
   if(!notaPredefinidaId && !(notaLibre && notaLibre.trim())) throw new Error('Debes indicar una nota predefinida o escribir una nota libre.');
+  if(notaLibre && notaLibre.length > NOTA_LIBRE_MAX) throw new Error(`El comentario libre no puede superar ${NOTA_LIBRE_MAX} caracteres.`);
   // Defensa extra: sin importar qué pantalla haya armado la lista de casos,
   // nunca se escribe la misma nota dos veces sobre el mismo caso.
   const idsUnicos = [...new Set(casoIds.map(String))];
+  const ahora = ldbAhora();
+  // Todas las notas de este lote se crean en el mismo instante, así que
+  // caen en el mismo mes -- se insertan de una sola vez en el libro de ese
+  // mes en vez de una llamada a Graph por cada caso (antes era la causa
+  // real de la lentitud al aplicar una nota masiva a muchos casos juntos).
+  const filasBitacora = idsUnicos.map(casoId=>({
+    bitacora_id: uid(), caso_id: casoId, paciente_row_id: '', modulo,
+    nota_predefinida_id: notaPredefinidaId||'', nota_libre: notaLibre||'',
+    usuario_id: usuarioId, fecha: ahora, es_automatica: false,
+  }));
+  const {driveId, itemId} = await libroDelMes(ldbMesDe(ahora));
+  await agregarFilasEn(driveId, itemId, 'TablaBitacora', COLUMNAS_BITACORA, filasBitacora);
+  // TablaCasos: una sola lectura fresca de toda la tabla (en vez de una
+  // relectura completa por cada caso), y los PATCH se mandan sin invalidar
+  // hasta el final.
+  const casosFrescos = await leerTabla('TablaCasos', true);
+  const porId = new Map(casosFrescos.map(c=>[String(c.caso_id), c]));
+  const cambiosComunes = {
+    fecha_ultima_actividad: ahora, tiene_bitacora: true, ultima_bitacora_fecha: ahora,
+    ultima_bitacora_nota_predefinida_id: notaPredefinidaId||'', ultima_bitacora_nota_libre: notaLibre||'',
+    ultima_bitacora_usuario_id: usuarioId,
+  };
+  let afectados = 0;
   for(const casoId of idsUnicos){
-    await ldbAgregarBitacora(casoId, modulo, notaPredefinidaId, notaLibre, usuarioId, null, false);
+    const fila = porId.get(casoId);
+    if(!fila) continue;
+    await patchFilaIndice('TablaCasos', fila, cambiosComunes, {sinInvalidar:true});
+    afectados++;
   }
-  return {ok:true, casos_afectados: idsUnicos.length};
+  invalidarCacheTablas(SP_ITEM_ID, 'TablaCasos');
+  return {ok:true, casos_afectados: afectados};
 }
 /* ---------- Marcar como visto el badge "Transferido" -- OJO: esto NO es
    una nota de gestión, es solo un acuse de que alguien revisó que el caso
@@ -4207,10 +4479,19 @@ async function ldbMarcarTransferidoVisto(casoIds){
   if(!casoIds || !casoIds.length) throw new Error('No se enviaron casos.');
   const idsUnicos = [...new Set(casoIds.map(String))];
   const ahora = ldbAhora();
+  // Una sola lectura fresca de TablaCasos para todo el lote, en vez de una
+  // relectura completa por cada caso marcado como visto.
+  const casosFrescos = await leerTabla('TablaCasos', true);
+  const porId = new Map(casosFrescos.map(c=>[String(c.caso_id), c]));
+  let afectados = 0;
   for(const casoId of idsUnicos){
-    await actualizarFilaPorId('TablaCasos', 'caso_id', casoId, {ultima_bitacora_fecha: ahora});
+    const fila = porId.get(casoId);
+    if(!fila) continue;
+    await patchFilaIndice('TablaCasos', fila, {ultima_bitacora_fecha: ahora}, {sinInvalidar:true});
+    afectados++;
   }
-  return {ok:true, casos_afectados: idsUnicos.length};
+  invalidarCacheTablas(SP_ITEM_ID, 'TablaCasos');
+  return {ok:true, casos_afectados: afectados};
 }
 async function ldbNotasPredefinidas(modulo){
   const notas = await leerTabla('TablaNotas');
@@ -4274,16 +4555,19 @@ async function ldbTransferirCaso(casoId, moduloDestino, nota, usuarioId){
 
 /* ---------- BUSCAR ---------- */
 async function ldbBuscar(termino){
-  const t = termino.trim().toLowerCase();
+  // normalizarTexto() quita tildes de ambos lados de la comparación -- sin
+  // esto, buscar "medico" no encontraba "médico" (y viceversa), un miss muy
+  // real dado que casi todo el texto de la app viene en español con tildes.
+  const t = normalizarTexto(termino);
   const casos = await ldbTodosCasosEnriquecidos();
   return casos.filter(c=>{
     if(!c.activo) return false;
-    if((c.codigo||'').toLowerCase().includes(t)) return true;
-    if((c.producto||'').toLowerCase().includes(t)) return true;
-    if((c.generico||'').toLowerCase().includes(t)) return true;
-    if((c.responsable||'').toLowerCase().includes(t)) return true;
-    if((c.cuenta||'').toLowerCase().includes(t)) return true;
-    return c.pacientes.some(p=>(p.nit_paciente||'').toLowerCase().includes(t)||(p.nombre_paciente||'').toLowerCase().includes(t)||String(p.numero_pedido||'').includes(t));
+    if(normalizarTexto(c.codigo||'').includes(t)) return true;
+    if(normalizarTexto(c.producto||'').includes(t)) return true;
+    if(normalizarTexto(c.generico||'').includes(t)) return true;
+    if(normalizarTexto(c.responsable||'').includes(t)) return true;
+    if(normalizarTexto(c.cuenta||'').includes(t)) return true;
+    return c.pacientes.some(p=>normalizarTexto(p.nit_paciente||'').includes(t)||normalizarTexto(p.nombre_paciente||'').includes(t)||String(p.numero_pedido||'').includes(t));
   });
 }
 
@@ -4297,8 +4581,8 @@ async function ldbBuscar(termino){
 async function ldbExportarCasos(fechaDesde, fechaHasta){
   const todos = await ldbTodosCasosEnriquecidos();
   let casos = todos.filter(c=>{
-    if(fechaDesde && f10(c.fecha_creacion) < fechaDesde) return false;
-    if(fechaHasta && f10(c.fecha_creacion) > fechaHasta) return false;
+    if(fechaDesde && f10Local(c.fecha_creacion) < fechaDesde) return false;
+    if(fechaHasta && f10Local(c.fecha_creacion) > fechaHasta) return false;
     return true;
   });
   if(!casos.length) return [];
@@ -4390,7 +4674,7 @@ async function ldbResumenGestion(){
   const viejos = casos.filter(c=>c.dias_abierto>15).length;
   const hoy = ldbHoy();
   let transferenciasHoy = 0;
-  casos.forEach(c=>c.transferencias.forEach(t=>{ if(f10(t.fecha)===hoy) transferenciasHoy++; }));
+  casos.forEach(c=>c.transferencias.forEach(t=>{ if(f10Local(t.fecha)===hoy) transferenciasHoy++; }));
   const porModulo = {};
   casos.forEach(c=>{ porModulo[c.modulo_actual]=(porModulo[c.modulo_actual]||0)+1; });
   const [usuarios, notas] = await Promise.all([leerTabla('TablaUsuarios'), leerTabla('TablaNotas')]);
@@ -4427,8 +4711,8 @@ async function ldbResumenGestion(){
 async function ldbIndicadores(fechaDesde, fechaHasta){
   const todos = await ldbTodosCasosEnriquecidos();
   const enRango = c=>{
-    if(fechaDesde && f10(c.fecha_creacion) < fechaDesde) return false;
-    if(fechaHasta && f10(c.fecha_creacion) > fechaHasta) return false;
+    if(fechaDesde && f10Local(c.fecha_creacion) < fechaDesde) return false;
+    if(fechaHasta && f10Local(c.fecha_creacion) > fechaHasta) return false;
     return true;
   };
   const casos = todos.filter(enRango);
@@ -4466,10 +4750,14 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
     const esSinNovedadClara = c.tipo_novedad==='Agotado' && !c.fecha_novedad;
     if(!esSinNovedadClara) return;
     if(!c.tiene_bitacora || !c.ultima_bitacora_nota_predefinida_id) return;
+    // El caso SÍ fue gestionado con una nota estándar -- eso cuenta aquí
+    // aunque esa nota ya no exista en el catálogo actual (fue borrada), para
+    // no confundir "nunca se gestionó" con "se gestionó pero la nota ya no
+    // está disponible para mostrar su texto".
+    sinNovedadClaraConNotaEstandar++;
     const texto = notaTextoPorId[c.ultima_bitacora_nota_predefinida_id];
     if(!texto) return;
     notasSinNovedadMap[texto] = (notasSinNovedadMap[texto]||0)+1;
-    sinNovedadClaraConNotaEstandar++;
   });
   const notasSinNovedadClara = Object.entries(notasSinNovedadMap)
     .map(([nota,total])=>({nota,total})).sort((a,b)=>b.total-a.total).slice(0,10);
@@ -4484,7 +4772,7 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
   casos.forEach(c=>{ if(c.cuenta){ cuentasMap[c.cuenta]=(cuentasMap[c.cuenta]||0)+1; } });
   const topCuentas = Object.entries(cuentasMap).map(([cuenta,total])=>({cuenta,total})).sort((a,b)=>b.total-a.total).slice(0,10);
   const tendenciaMap = {};
-  casos.forEach(c=>{ const f=f10(c.fecha_creacion); if(f) tendenciaMap[f]=(tendenciaMap[f]||0)+1; });
+  casos.forEach(c=>{ const f=f10Local(c.fecha_creacion); if(f) tendenciaMap[f]=(tendenciaMap[f]||0)+1; });
   const tendenciaDiaria = Object.entries(tendenciaMap).map(([fecha,total])=>({fecha,total})).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const pacientesAfectados = new Set();
   casos.forEach(c=>c.pacientes.forEach(p=>{ if(p.nit_paciente) pacientesAfectados.add(p.nit_paciente); }));
@@ -4513,14 +4801,92 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
     cargaMap[c.modulo_actual]._dias.push(ldbDiasAbierto(c.fecha_creacion));
   });
   const cargaPorModulo = Object.values(cargaMap).map(m=>({modulo_actual:m.modulo_actual,unidades_pendientes:m.unidades_pendientes,dias_promedio_abierto:m._dias.length?m._dias.reduce((a,b)=>a+b,0)/m._dias.length:null}));
+  // ---- Analítica predictiva: no son modelos de machine learning, son las
+  // mismas señales que ya usa el negocio (reaperturas, si el patrón se está
+  // acelerando, si el código sigue con un caso abierto hoy) combinadas en
+  // un puntaje -- para anticipar qué SKU probablemente vuelva a dar
+  // problema, en vez de solo contar lo que ya pasó. El historial de
+  // reaperturas de cada código se mira COMPLETO (todos los casos que haya
+  // tenido, no solo los del rango de fechas consultado), porque la
+  // aceleración de un patrón no se puede ver mirando solo una ventana
+  // corta -- pero solo se calcula para los códigos que sí tienen al menos
+  // un caso dentro del periodo consultado, para que la lista siga
+  // respondiendo al filtro de fechas de la pantalla.
+  const codigosEnRango = new Set(casos.map(c=>c.codigo));
+  const casosPorCodigoTodos = {};
+  todos.forEach(c=>{ if(!codigosEnRango.has(c.codigo)) return; (casosPorCodigoTodos[c.codigo]=casosPorCodigoTodos[c.codigo]||[]).push(c); });
+  const skusRiesgo = Object.values(casosPorCodigoTodos).map(casosCodigo=>{
+    const ordenados = casosCodigo.slice().sort((a,b)=>String(a.fecha_creacion).localeCompare(String(b.fecha_creacion)));
+    const veces = ordenados.length;
+    const abiertosAhora = ordenados.filter(c=>c.activo).length;
+    // Brecha en días entre una apertura y la siguiente -- si la más
+    // reciente es notablemente más corta que el promedio de las
+    // anteriores, el código no solo se repite: se está reabriendo cada
+    // vez más seguido.
+    const brechas = [];
+    for(let i=1;i<ordenados.length;i++){
+      const d = ldbDiasEntre(ordenados[i-1].fecha_creacion, ordenados[i].fecha_creacion);
+      if(d!=null) brechas.push(d);
+    }
+    let acelerando = false, ultimaBrecha = null, brechaPromedioAnterior = null;
+    if(brechas.length>=2){
+      ultimaBrecha = brechas[brechas.length-1];
+      const anteriores = brechas.slice(0,-1);
+      brechaPromedioAnterior = anteriores.reduce((a,b)=>a+b,0)/anteriores.length;
+      acelerando = ultimaBrecha < brechaPromedioAnterior*0.7;
+    }
+    const diasAbiertoMax = Math.max(...ordenados.map(c=>c.activo ? ldbDiasAbierto(c.fecha_creacion) : (c.fecha_cierre ? ldbDiasEntre(c.fecha_creacion,c.fecha_cierre) : 0)));
+    let score = 0;
+    score += Math.min(veces,6)*10;       // hasta 60 pts por cuántas veces se ha abierto (tope para que un SKU disparado no acapare todo el rango)
+    score += abiertosAhora ? 20 : 0;     // sigue siendo un problema activo HOY, no solo historia
+    score += acelerando ? 25 : 0;        // el patrón se está acelerando
+    score += diasAbiertoMax>15 ? 10 : 0; // algún episodio tardó demasiado en resolverse
+    const nivel = score>=55 ? 'Alto' : (score>=30 ? 'Medio' : 'Bajo');
+    return {
+      codigo: ordenados[0].codigo, producto: ordenados[ordenados.length-1].producto,
+      veces, casos_abiertos_ahora: abiertosAhora, acelerando,
+      ultima_brecha_dias: ultimaBrecha!=null?Math.round(ultimaBrecha):null,
+      brecha_promedio_anterior_dias: brechaPromedioAnterior!=null?Math.round(brechaPromedioAnterior):null,
+      dias_abierto_max: diasAbiertoMax, score, nivel,
+    };
+  }).filter(s=>s.score>0 && (s.veces>1 || s.casos_abiertos_ahora>0))
+    .sort((a,b)=>b.score-a.score).slice(0,10);
+  // ---- Bodegas con un atraso fuera de lo normal comparadas ENTRE ELLAS
+  // (no contra un número fijo inventado) -- una bodega cuyo promedio de
+  // días abiertos está muy por encima del promedio de las demás bodegas
+  // probablemente tiene un problema operativo puntual (capacidad,
+  // personal, proveedor) que vale la pena mirar antes de que seextienda.
+  const bodegaDiasMap = {};
+  casos.filter(c=>c.activo).forEach(c=>{
+    const b = String(c.bodega_id||'');
+    if(!b) return;
+    (bodegaDiasMap[b]=bodegaDiasMap[b]||[]).push(ldbDiasAbierto(c.fecha_creacion));
+  });
+  const bodegasStats = Object.entries(bodegaDiasMap)
+    .filter(([,dias])=>dias.length>=3) // con 1-2 casos cualquier promedio es puro ruido
+    .map(([bodega_id,dias])=>({bodega_id, casos_abiertos:dias.length, dias_promedio:dias.reduce((a,b)=>a+b,0)/dias.length}));
+  const promedioGeneralBodegas = bodegasStats.length ? bodegasStats.reduce((s,b)=>s+b.dias_promedio,0)/bodegasStats.length : 0;
+  const bodegasAtrasoAnomalo = bodegasStats
+    .map(b=>({...b, promedio_general_bodegas: promedioGeneralBodegas, desviacion_pct: promedioGeneralBodegas ? Math.round((b.dias_promedio-promedioGeneralBodegas)/promedioGeneralBodegas*100) : 0}))
+    .filter(b=>b.desviacion_pct>=40) // al menos 40% más lenta que el promedio de las demás
+    .sort((a,b)=>b.desviacion_pct-a.desviacion_pct);
+
   let comparacionPeriodoAnterior = null;
   if(fechaDesde && fechaHasta){
-    const d1=new Date(fechaDesde), d2=new Date(fechaHasta);
+    // Aritmética de fechas en UTC puro (Date.UTC), igual que f10() trata las
+    // fechas como strings YYYY-MM-DD -- así se evita que, en una zona horaria
+    // al oeste de UTC (como Colombia, UTC-5), new Date('YYYY-MM-DD') más
+    // setDate() en hora local termine corriendo el rango del periodo
+    // anterior un día de más o de menos.
+    const [y1,m1,dd1] = fechaDesde.split('-').map(Number);
+    const [y2,m2,dd2] = fechaHasta.split('-').map(Number);
+    const d1=Date.UTC(y1,m1-1,dd1), d2=Date.UTC(y2,m2-1,dd2);
     const dias = Math.round((d2-d1)/86400000)+1;
-    const fechaHastaPrev = new Date(d1); fechaHastaPrev.setDate(fechaHastaPrev.getDate()-1);
-    const fechaDesdePrev = new Date(fechaHastaPrev); fechaDesdePrev.setDate(fechaDesdePrev.getDate()-(dias-1));
-    const fhp=fechaHastaPrev.toISOString().slice(0,10), fdp=fechaDesdePrev.toISOString().slice(0,10);
-    const casosPrev = todos.filter(c=>f10(c.fecha_creacion)>=fdp && f10(c.fecha_creacion)<=fhp);
+    const fechaHastaPrevMs = d1 - 86400000;
+    const fechaDesdePrevMs = fechaHastaPrevMs - (dias-1)*86400000;
+    const fhp = new Date(fechaHastaPrevMs).toISOString().slice(0,10);
+    const fdp = new Date(fechaDesdePrevMs).toISOString().slice(0,10);
+    const casosPrev = todos.filter(c=>f10Local(c.fecha_creacion)>=fdp && f10Local(c.fecha_creacion)<=fhp);
     comparacionPeriodoAnterior = {fecha_desde:fdp, fecha_hasta:fhp, total_casos:casosPrev.length, casos_cerrados:casosPrev.filter(c=>!c.activo).length};
   }
   return {general, por_tipo_novedad:porTipoNovedad, por_modulo:porModulo, skus_recurrentes:skusRecurrentes,
@@ -4529,6 +4895,7 @@ async function ldbIndicadores(fechaDesde, fechaHasta){
     pacientes_mas_afectados:pacientesMasAfectados, carga_por_modulo:cargaPorModulo,
     notas_sin_novedad_clara:notasSinNovedadClara, sin_novedad_clara_total:sinNovedadClaraTotal,
     sin_novedad_clara_con_nota_estandar:sinNovedadClaraConNotaEstandar,
+    skus_riesgo:skusRiesgo, bodegas_atraso_anomalo:bodegasAtrasoAnomalo,
     comparacion_periodo_anterior:comparacionPeriodoAnterior};
 }
 
@@ -4540,8 +4907,8 @@ async function ldbDetalleSku(codigo, fechaDesde, fechaHasta){
   if(!codigo) throw new Error('Falta el código a consultar.');
   const todos = await ldbTodosCasosEnriquecidos();
   const enRango = c=>{
-    if(fechaDesde && f10(c.fecha_creacion) < fechaDesde) return false;
-    if(fechaHasta && f10(c.fecha_creacion) > fechaHasta) return false;
+    if(fechaDesde && f10Local(c.fecha_creacion) < fechaDesde) return false;
+    if(fechaHasta && f10Local(c.fecha_creacion) > fechaHasta) return false;
     return true;
   };
   const casos = todos.filter(c=> String(c.codigo)===String(codigo) && enRango(c));
@@ -4673,13 +5040,25 @@ function ldbQS(path){
 function _asegurarDB(){
   if(!DB_DISPONIBLE) throw new Error('La aplicación todavía no está lista para usarse. Comunícate con el administrador.');
 }
+// Guarda de las rutas de administración (Usuarios / Notas predefinidas).
+// La UI ya oculta estas pantallas a quien no es admin, pero eso solo
+// evita el clic -- cualquiera con la consola abierta podía llamar estas
+// funciones directo. Esta guarda revisa la sesión real (la misma que ya
+// se revalida contra la hoja de Usuarios en segundo plano) antes de dejar
+// pasar cualquier lectura o escritura administrativa.
+function _asegurarAdmin(){
+  const sesion = getSesion();
+  if(!sesion || sesion.rol !== 'admin'){
+    throw new Error('No tienes permisos de administrador para esta acción.');
+  }
+}
 async function apiGet(path){
   _asegurarDB();
   const base = path.split('?')[0];
   const qs = ldbQS(path);
   if(base==='resumen') return ldbResumenGestion();
-  if(base==='admin/notas') return ldbListarNotasAdmin();
-  if(base==='admin/usuarios') return ldbListarUsuarios();
+  if(base==='admin/notas'){ _asegurarAdmin(); return ldbListarNotasAdmin(); }
+  if(base==='admin/usuarios'){ _asegurarAdmin(); return ldbListarUsuarios(); }
   if(base==='indicadores') return ldbIndicadores(qs.fecha_desde, qs.fecha_hasta);
   if(base==='indicadores/sku') return ldbDetalleSku(qs.codigo||'', qs.fecha_desde, qs.fecha_hasta);
   if(base==='exportar-casos') return ldbExportarCasos(qs.fecha_desde, qs.fecha_hasta);
@@ -4698,8 +5077,8 @@ async function apiPost(path, body){
   _asegurarDB();
   const base = path.split('?')[0];
   body = body || {};
-  if(base==='admin/notas') return await ldbCrearNotaPredefinida(body.modulo, body.texto, body.orden);
-  if(base==='admin/usuarios') return await ldbCrearUsuario(body.nombre, body.email, body.rol, body.modulo_asignado);
+  if(base==='admin/notas'){ _asegurarAdmin(); return await ldbCrearNotaPredefinida(body.modulo, body.texto, body.orden); }
+  if(base==='admin/usuarios'){ _asegurarAdmin(); return await ldbCrearUsuario(body.nombre, body.email, body.rol, body.modulo_asignado); }
   if(base==='bitacora/lote') return await ldbAgregarBitacoraLote(body.caso_ids, body.modulo, body.nota_predefinida_id, body.nota_libre, body.usuario_id);
   if(base==='casos/marcar-transferido-visto') return await ldbMarcarTransferidoVisto(body.caso_ids);
   let m;
@@ -4712,8 +5091,8 @@ async function apiPatch(path, body){
   const base = path.split('?')[0];
   body = body || {};
   let m;
-  if((m = base.match(/^admin\/notas\/([^/]+)$/))) return await ldbActualizarNotaPredefinida(m[1], body.texto, body.orden, body.activo);
-  if((m = base.match(/^admin\/usuarios\/([^/]+)$/))) return await ldbActualizarUsuario(m[1], body.activo, body.rol, body.modulo_asignado, body.nombre);
+  if((m = base.match(/^admin\/notas\/([^/]+)$/))){ _asegurarAdmin(); return await ldbActualizarNotaPredefinida(m[1], body.texto, body.orden, body.activo); }
+  if((m = base.match(/^admin\/usuarios\/([^/]+)$/))){ _asegurarAdmin(); return await ldbActualizarUsuario(m[1], body.activo, body.rol, body.modulo_asignado, body.nombre); }
   throw new Error('Ruta no reconocida (PATCH): ' + path);
 }
 function actualizarEstadoConexion(){
@@ -4722,9 +5101,12 @@ function actualizarEstadoConexion(){
   if(dot) dot.style.background = DB_DISPONIBLE ? 'var(--green)' : 'var(--red)';
   if(label) label.textContent = DB_DISPONIBLE ? 'Conectado (SharePoint)' : 'Sin conectar';
 }
-async function descargarArchivo(nombreArchivo, contenidoTexto){
+// Siempre antepone el BOM de UTF-8 (para que Excel muestre bien tildes/ñ)
+// y usa el tipo MIME correcto de CSV -- así ningún llamador tiene que
+// acordarse de hacerlo por su cuenta.
+async function descargarArchivo(nombreArchivo, contenidoTextoCsv){
   try{
-    const blob = new Blob([contenidoTexto], {type:'text/plain;charset=utf-8;'});
+    const blob = new Blob(['﻿'+contenidoTextoCsv], {type:'text/csv;charset=utf-8;'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = nombreArchivo;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -5037,8 +5419,8 @@ async function ejecutarIngestaLocal(files, guardar){
 
   const casosNuevosBatch = [];
   const pacientesNuevosBatch = [];
-  const casosActualizarBatch = []; // {filaConIndice, cambios}
-  const pacientesDesactivarBatch = []; // {filaConIndice}
+  const casosActualizarBatch = []; // {caso_id, cambios}
+  const pacientesDesactivarBatch = []; // {paciente_row_id}
 
   function filaPaciente(casoId, p){
     return {
@@ -5107,13 +5489,13 @@ async function ejecutarIngestaLocal(files, guardar){
       cambios.ultima_bitacora_nota_libre = '';
       cambios.ultima_bitacora_usuario_id = '';
     }
-    casosActualizarBatch.push({filaConIndice: casoPrevio, cambios});
+    casosActualizarBatch.push({caso_id: casoPrevio.caso_id, cambios});
 
     // Reemplazar el detalle de pacientes: desactivar los anteriores de este
     // caso (ya los tenemos en memoria de la única lectura de arriba) y
     // encolar los nuevos para insertarlos todos juntos al final.
     for(const pAnterior of (pacientesPreviosPorCaso[casoPrevio.caso_id]||[])){
-      pacientesDesactivarBatch.push({filaConIndice: pAnterior});
+      pacientesDesactivarBatch.push({paciente_row_id: pAnterior.paciente_row_id});
     }
     const pacientesNuevos = pacientesPorIdCaso[f.id_caso] || [];
     pacientesNuevos.forEach(p=>{ pacientesNuevosBatch.push(filaPaciente(casoPrevio.caso_id, p)); nPac++; });
@@ -5121,28 +5503,59 @@ async function ejecutarIngestaLocal(files, guardar){
   }
 
   for(const c of cerrados){
-    casosActualizarBatch.push({filaConIndice: c, cambios: {activo:false, fecha_cierre: ldbAhora()}});
+    casosActualizarBatch.push({caso_id: c.caso_id, cambios: {activo:false, fecha_cierre: ldbAhora()}});
     nCerr++;
   }
 
-  // ---- Se manda todo: primero las inserciones (no dependen de índices
-  // existentes), luego las actualizaciones por índice conocido. Los PATCH
-  // van en serie (Excel Online no maneja bien escrituras simultáneas sobre
-  // el mismo libro), pero como ya no vuelven a releer la tabla en cada
-  // paso, siguen siendo mucho más rápidos que antes. ----
+  // ---- Orden de escritura pensado para que, si algo se corta a la mitad
+  // (se cierra la pestana, se cae la red, Microsoft corta la carga), el
+  // dano de un corte a medias sea lo mas leve e inofensivo posible:
+  //  1) Insertar los casos nuevos (no dependen de nada mas).
+  //  2) DESACTIVAR primero los pacientes anteriores de los casos que
+  //     continuan, ANTES de insertar los nuevos -- si se corta aqui, un
+  //     caso queda momentaneamente sin pacientes visibles (un subconteo
+  //     que se nota y se corrige solo en la siguiente carga), en vez de
+  //     quedar con los pacientes viejos Y los nuevos activos a la vez
+  //     (un sobreconteo silencioso que duplicaria cantidades en reportes
+  //     sin que nadie lo note).
+  //  3) Insertar los pacientes nuevos.
+  //  4) Actualizar/cerrar los casos.
+  // Justo antes de los PATCH (pasos 2 y 4) se vuelve a leer la tabla en
+  // limpio y se ubica cada fila por su ID real (paciente_row_id / caso_id),
+  // no por el indice que se capturo al principio de esta funcion -- asi,
+  // si otra persona inserto o modifico filas en esa tabla mientras esta
+  // carga se procesaba, el PATCH sigue cayendo en la fila correcta en vez
+  // de sobrescribir silenciosamente la fila de otro usuario. ----
+  const erroresParciales = [];
   if(casosNuevosBatch.length) await agregarFilas('TablaCasos', casosNuevosBatch);
+
+  if(pacientesDesactivarBatch.length){
+    const pacientesFrescos = await leerTabla('TablaPacientes', true);
+    const porIdPac = new Map(pacientesFrescos.map(p=>[String(p.paciente_row_id), p]));
+    for(const {paciente_row_id} of pacientesDesactivarBatch){
+      const filaFresca = porIdPac.get(String(paciente_row_id));
+      if(!filaFresca){ erroresParciales.push(`Paciente ${paciente_row_id} ya no se encontro al guardar (posible edicion simultanea) -- se omitio.`); continue; }
+      await patchFilaIndice('TablaPacientes', filaFresca, {activo:false}, {sinInvalidar:true});
+    }
+    invalidarCacheTablas(SP_ITEM_ID, 'TablaPacientes');
+  }
+
   if(pacientesNuevosBatch.length) await agregarFilas('TablaPacientes', pacientesNuevosBatch);
-  for(const {filaConIndice} of pacientesDesactivarBatch){
-    await patchFilaIndice('TablaPacientes', filaConIndice, {activo:false}, {sinInvalidar:true});
+
+  if(casosActualizarBatch.length){
+    const casosFrescos = await leerTabla('TablaCasos', true);
+    const porIdCaso = new Map(casosFrescos.map(c=>[String(c.caso_id), c]));
+    for(const {caso_id, cambios} of casosActualizarBatch){
+      const filaFresca = porIdCaso.get(String(caso_id));
+      if(!filaFresca){ erroresParciales.push(`Caso ${caso_id} ya no se encontro al guardar (posible edicion simultanea) -- se omitio.`); continue; }
+      await patchFilaIndice('TablaCasos', filaFresca, cambios, {sinInvalidar:true});
+    }
+    invalidarCacheTablas(SP_ITEM_ID, 'TablaCasos');
   }
-  if(pacientesDesactivarBatch.length) invalidarCacheTablas(SP_ITEM_ID, 'TablaPacientes');
-  for(const {filaConIndice, cambios} of casosActualizarBatch){
-    await patchFilaIndice('TablaCasos', filaConIndice, cambios, {sinInvalidar:true});
-  }
-  if(casosActualizarBatch.length) invalidarCacheTablas(SP_ITEM_ID, 'TablaCasos');
 
   return {nuevos_insertados:nIns, casos_actualizados:nUpd, casos_cerrados:nCerr,
-    filas_pacientes_cargadas:nPac, reasignados_de_modulo:reasignados, guardado:true};
+    filas_pacientes_cargadas:nPac, reasignados_de_modulo:reasignados, guardado:true,
+    advertencias: erroresParciales};
 }
 
 
@@ -5157,7 +5570,18 @@ function getSesion(){
 function setSesion(datos){ localStorage.setItem(SESION_KEY, JSON.stringify(datos)); }
 function cerrarSesion(){
   localStorage.removeItem(SESION_KEY);
-  location.reload();
+  // Cerrar sesión también debe cerrarla en Microsoft, no solo en esta app
+  // -- si no, la cuenta queda cacheada (MSAL usa sessionStorage) y quien
+  // siga en esa misma pestaña vuelve a entrar sin que se le pida nada,
+  // dando una falsa sensación de haber cerrado sesión en un equipo
+  // compartido. logoutRedirect navega fuera de la página, así que no hace
+  // falta un location.reload() después -- solo como respaldo si algo
+  // impide el redirect (por ejemplo, MSAL no llegó a inicializar).
+  if(typeof msalApp !== 'undefined' && msalApp && msalCuenta){
+    msalApp.logoutRedirect({ account: msalCuenta }).catch(()=>{ location.reload(); });
+  } else {
+    location.reload();
+  }
 }
 
 // Mapa de rol -> qué puede ver en el menú. admin ve todo.
@@ -5308,6 +5732,70 @@ async function revalidarSesionEnSegundoPlano(sesionCacheada){
     cerrarSesion();
   }
 }
+// La revalidación de arriba solo corría UNA vez, justo al cargar la
+// página -- alguien que deja la pestaña abierta por horas (o días) nunca
+// volvía a chequear si un administrador lo desactivó o le cambió el rol
+// mientras tanto. Se vuelve a revalidar cada 15 minutos y también cada vez
+// que la pestaña vuelve a tener foco después de estar en segundo plano
+// (cubre el caso típico de "dejé la pestaña abierta toda la noche y hoy
+// la retomo"), sin necesidad de que la persona recargue manualmente.
+const REVALIDACION_SESION_MS = 15*60*1000;
+let _ultimaRevalidacionSesion = Date.now();
+function _revalidarSesionSiAplica(){
+  const sesion = getSesion();
+  if(!sesion || !msalCuenta) return;
+  if(Date.now() - _ultimaRevalidacionSesion < REVALIDACION_SESION_MS) return;
+  _ultimaRevalidacionSesion = Date.now();
+  revalidarSesionEnSegundoPlano(sesion);
+}
+setInterval(_revalidarSesionSiAplica, REVALIDACION_SESION_MS);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') _revalidarSesionSiAplica(); });
+
+/* ---------- Accesibilidad de modales -- rol de diálogo, foco inicial al
+   abrir, trampa de Tab dentro del modal mientras está abierto, y devolver
+   el foco a quien lo abrió al cerrarlo. En vez de tocar cada botón que
+   abre/cierra cada uno de los ~10 modales del app uno por uno (con el
+   riesgo de dejar alguno afuera), se observa de forma genérica cualquier
+   ".overlay" que gane o pierda la clase "active" -- cubre todos los
+   modales existentes y cualquiera que se agregue después, sin cambiar su
+   código de apertura/cierre. ---------- */
+(function(){
+  let focoPrevio = null;
+  let overlayActivo = null;
+  function elementosFocables(modal){
+    return [...modal.querySelectorAll('a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+      .filter(el=>el.offsetParent!==null);
+  }
+  function trampaTab(e){
+    if(e.key!=='Tab' || !overlayActivo) return;
+    const modal = overlayActivo.querySelector('.modal') || overlayActivo;
+    const focables = elementosFocables(modal);
+    if(!focables.length) return;
+    const primero = focables[0], ultimo = focables[focables.length-1];
+    if(e.shiftKey && document.activeElement===primero){ e.preventDefault(); ultimo.focus(); }
+    else if(!e.shiftKey && document.activeElement===ultimo){ e.preventDefault(); primero.focus(); }
+  }
+  document.addEventListener('keydown', trampaTab);
+  document.querySelectorAll('.overlay').forEach(overlay=>{
+    const modal = overlay.querySelector('.modal') || overlay;
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    new MutationObserver(()=>{
+      const activo = overlay.classList.contains('active');
+      if(activo && overlayActivo!==overlay){
+        focoPrevio = document.activeElement;
+        overlayActivo = overlay;
+        const focable = elementosFocables(modal)[0];
+        if(focable) focable.focus();
+      } else if(!activo && overlayActivo===overlay){
+        overlayActivo = null;
+        if(focoPrevio && document.body.contains(focoPrevio) && typeof focoPrevio.focus==='function') focoPrevio.focus();
+        focoPrevio = null;
+      }
+    }).observe(overlay, {attributes:true, attributeFilter:['class']});
+  });
+})();
+
 iniciarAppLocal();
 
 
@@ -5361,18 +5849,28 @@ document.getElementById('carga-procesar').addEventListener('click', async ()=>{
   resultadoDiv.innerHTML = '<div class="empty">Procesando en tu navegador, esto puede tardar unos segundos (o más, según el tamaño de los archivos)...</div>';
   try{
     const r = await ejecutarIngestaLocal(cargaArchivos, !ensayo);
+    const advertencias = r.advertencias && r.advertencias.length
+      ? `<br><br><span style="color:var(--red);">Advertencias (${r.advertencias.length}):</span><br>${r.advertencias.map(a=>esc(a)).join('<br>')}`
+      : '';
     resultadoDiv.innerHTML = `<div class="resumen-carga">
       <strong>${ensayo ? 'Ensayo completado — no se guardó nada todavía:' : 'Guardado correctamente:'}</strong><br>
       Casos nuevos: <strong>${r.nuevos_insertados}</strong><br>
       Casos que continúan (actualizados): <strong>${r.casos_actualizados}</strong><br>
       Casos que se cerraron: <strong>${r.casos_cerrados}</strong><br>
       Filas de pacientes cargadas: <strong>${r.filas_pacientes_cargadas}</strong>
-      ${ensayo ? '<br><br>Si estos números se ven bien, desmarca "Modo ensayo" arriba y vuelve a procesar para guardar de verdad.' : ''}
+      ${ensayo ? '<br><br>Si estos números se ven bien, desmarca "Modo ensayo" arriba y vuelve a procesar para guardar de verdad.' : ''}${advertencias}
     </div>`;
     toast(ensayo ? 'Ensayo completado.' : 'Datos guardados.', true);
     if(!ensayo) invalidarCacheDatos();
   } catch(err){
-    resultadoDiv.innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}</div>`;
+    // Si el error ocurrió durante el guardado real (no en el ensayo), es
+    // posible que parte de la carga ya se haya escrito antes del corte --
+    // se lo advertimos explícitamente en vez de dejar que la persona crea
+    // que no pasó nada y reprocese el mismo archivo sin más contexto.
+    const contextoParcial = !ensayo
+      ? '<br><br>Si esto ocurrió a mitad de un guardado real, es posible que parte de los datos ya se haya guardado antes del corte. Antes de volver a procesar el mismo archivo, revisa el módulo correspondiente para confirmar el estado actual.'
+      : '';
+    resultadoDiv.innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}${contextoParcial}</div>`;
     toast('No se pudo procesar la carga — revisa el detalle en pantalla.');
   } finally {
     btn.disabled = cargaArchivos.length === 0;
