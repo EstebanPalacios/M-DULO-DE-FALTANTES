@@ -64,6 +64,15 @@
      así se ve como una etiqueta clara en la esquina, nunca se confunde con
      el fondo ni se puede perder aunque algún estilo heredado cambie. */
   .ultima-actualizacion-informe{color:#000 !important;font-weight:700;background:#EEF1F4;border:1px solid #D3DAE1;padding:3px 8px;border-radius:6px;font-size:10px;white-space:nowrap;}
+  /* ---------- Rol de solo lectura (Visualización) -- ve y exporta todo,
+     pero los botones de agregar nota / transferir se ocultan directo (no
+     solo se bloquean al hacer clic) para que quede claro de una que esa
+     acción no está disponible con este perfil. ---------- */
+  body.rol-lectura #ab-bulk-note, body.rol-lectura #ab-bulk-transfer,
+  body.rol-lectura .ab-transfer, body.rol-lectura .cng-transfer,
+  body.rol-lectura .cng-p-bulk-note, body.rol-lectura .cng-p-bulk-tr, body.rol-lectura .cng-p-transfer,
+  body.rol-lectura .al-transfer, body.rol-lectura .al-b-bulk-note, body.rol-lectura .al-b-bulk-tr,
+  body.rol-lectura .al-mol-bit{display:none !important;}
   .search-trigger{display:flex;align-items:center;gap:8px;background:#f4f6f8;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--muted);cursor:pointer;min-width:280px;}
   .search-trigger:hover{background:#eef1f4;border-color:#c7cfd6;}
   .kbd{margin-left:auto;background:#fff;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:10.5px;color:var(--muted);font-weight:700;}
@@ -369,14 +378,19 @@
      formulario de login "parpadear" antes de entrar directo, ni la app
      entrar con los contadores en 0 antes de que carguen los datos reales.
      Se ve desde el primer instante (antes de que corra cualquier JS) porque
-     es parte del HTML inicial, y se desvanece con una transición suave una
-     vez que ya se sabe qué mostrar. ---------- */
-  #boot-overlay{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--navy);opacity:1;visibility:visible;transition:opacity .5s cubic-bezier(.16,1,.3,1),visibility .5s cubic-bezier(.16,1,.3,1);}
+     es parte del HTML inicial. Estilo translúcido (vidrio esmerilado, no un
+     bloque de color sólido) y con el texto de estado cambiando según el
+     paso real que está corriendo (verificar sesión / actualizar datos), no
+     un spinner decorativo desconectado de lo que en verdad está pasando. */
+  #boot-overlay{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(244,246,248,.62);backdrop-filter:blur(26px) saturate(170%);-webkit-backdrop-filter:blur(26px) saturate(170%);opacity:1;visibility:visible;transition:opacity .28s cubic-bezier(.16,1,.3,1),visibility .28s cubic-bezier(.16,1,.3,1);}
   #boot-overlay.oculto{opacity:0;visibility:hidden;pointer-events:none;}
-  #boot-overlay .boot-mark{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px;letter-spacing:.5px;}
-  #boot-overlay .boot-spin{width:24px;height:24px;border-radius:50%;border:2.5px solid rgba(255,255,255,.18);border-top-color:#5eead4;animation:bootSpin .8s linear infinite;}
+  #boot-overlay .boot-ringwrap{position:relative;width:44px;height:44px;}
+  #boot-overlay .boot-ring{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg, var(--orange), rgba(13,148,136,0) 72%);-webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));animation:bootSpin .6s linear infinite;}
   @keyframes bootSpin{to{transform:rotate(360deg);}}
-  #boot-overlay .boot-txt{color:rgba(255,255,255,.55);font-size:11.5px;font-weight:700;letter-spacing:.3px;}
+  #boot-overlay .boot-mark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:var(--navy);letter-spacing:.2px;}
+  #boot-overlay .boot-txt{color:var(--muted);font-size:11.5px;font-weight:700;letter-spacing:.2px;min-height:14px;}
+  #boot-overlay .boot-txt.fx{animation:bootTxtFade .25s ease;}
+  @keyframes bootTxtFade{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:translateY(0);}}
   #login-overlay{z-index:110;}
   .login-overlay{padding:0;align-items:stretch;justify-content:stretch;background:var(--navy);}
   .login-split{display:flex;width:100%;height:100%;}
@@ -540,9 +554,11 @@ License: MIT
 </head>
 <body>
 <div id="boot-overlay" aria-hidden="true">
-  <div class="boot-mark">GF</div>
-  <div class="boot-spin"></div>
-  <div class="boot-txt">Cargando…</div>
+  <div class="boot-ringwrap">
+    <div class="boot-ring"></div>
+    <div class="boot-mark">GF</div>
+  </div>
+  <div class="boot-txt" id="boot-status">Cargando…</div>
 </div>
 <div id="app">
   <nav id="sidebar" aria-label="Navegación principal">
@@ -722,6 +738,7 @@ License: MIT
               <div class="field"><label>Rol</label><select id="usr-rol">
                 <option value="admin">Administrador</option>
                 <option value="CNG">CNG</option><option value="Abastecimiento">Abastecimiento</option><option value="Aliados">Aliados</option>
+                <option value="Visualizacion">Visualización (solo ver y exportar)</option>
               </select></div>
               <button class="btn-primary" id="usr-crear">Crear usuario</button>
             </div>
@@ -731,6 +748,7 @@ License: MIT
                 <option value="">Todos</option>
                 <option value="admin">Administrador</option>
                 <option value="CNG">CNG</option><option value="Abastecimiento">Abastecimiento</option><option value="Aliados">Aliados</option>
+                <option value="Visualizacion">Visualización</option>
               </select></div>
               <div class="field"><label>Estado</label><select id="usr-estado-filtro">
                 <option value="">Todos</option>
@@ -772,6 +790,8 @@ License: MIT
           <div class="filters" style="margin-bottom:0;">
             <div class="field"><label>Desde</label><input type="date" id="rs-exp-desde"></div>
             <div class="field"><label>Hasta</label><input type="date" id="rs-exp-hasta"></div>
+            <div class="field"><label>Bodega</label><div id="rs-exp-ms-bodega"></div></div>
+            <div class="field"><label>Convenio</label><div id="rs-exp-ms-convenio"></div></div>
             <div class="field"><label>Accesos rápidos</label><div class="chips">
               <button class="chip" id="rs-exp-semana" type="button">Última semana</button>
               <button class="chip" id="rs-exp-mes" type="button">Último mes</button>
@@ -831,6 +851,8 @@ License: MIT
           <div class="filters">
             <div class="field"><label>Fecha creación desde</label><input type="date" id="ind-desde"></div>
             <div class="field"><label>Fecha creación hasta</label><input type="date" id="ind-hasta"></div>
+            <div class="field"><label>Bodega</label><div id="ind-ms-bodega"></div></div>
+            <div class="field"><label>Convenio</label><div id="ind-ms-convenio"></div></div>
             <button class="btn-primary" id="ind-consultar">Consultar</button>
             <button class="btn-ghost" id="ind-limpiar">Todo el histórico</button>
             <button class="btn-ghost" id="ind-exportar">Exportar CSV</button>
@@ -994,10 +1016,12 @@ License: MIT
     <h3>Bitácora de seguimiento</h3>
     <div class="sub" id="bitacora-sub"></div>
     <div id="bitacora-list"></div>
-    <label>Selecciona una nota</label>
-    <select id="bitacora-nota-select"></select>
-    <label style="font-size:11.5px;color:var(--muted);font-weight:600;margin-top:10px;">¿Algo más que agregar? (opcional)</label>
-    <textarea id="bitacora-nota-libre" placeholder="Comentario adicional..." maxlength="500" style="min-height:60px;"></textarea>
+    <div id="bitacora-agregar-wrap">
+      <label>Selecciona una nota</label>
+      <select id="bitacora-nota-select"></select>
+      <label style="font-size:11.5px;color:var(--muted);font-weight:600;margin-top:10px;">¿Algo más que agregar? (opcional)</label>
+      <textarea id="bitacora-nota-libre" placeholder="Comentario adicional..." maxlength="500" style="min-height:60px;"></textarea>
+    </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="bitacora-cancel">Cerrar</button>
       <button class="btn-primary" id="bitacora-save">Guardar nota</button>
@@ -1856,6 +1880,12 @@ async function openBitacora(casoId, modulo, pacienteId, titulo, onSave){
   document.getElementById('bitacora-nota-libre').value = '';
   document.getElementById('bitacora-list').innerHTML = '<div class="empty">Cargando historial...</div>';
   document.getElementById('bitacora-overlay').classList.add('active');
+  // Perfil de Visualización: puede ver todo el historial de la bitácora,
+  // pero no agregar notas nuevas -- se oculta el formulario de captura y
+  // solo queda el botón de cerrar.
+  const soloLectura = esRolSoloLectura();
+  document.getElementById('bitacora-agregar-wrap').style.display = soloLectura ? 'none' : '';
+  document.getElementById('bitacora-save').style.display = soloLectura ? 'none' : '';
   try{
     const [notas, caso] = await Promise.all([
       apiGet(`bitacora-notas/${modulo}`),
@@ -1907,6 +1937,7 @@ function renderBitacoraList(entradas, containerId){
 }
 document.getElementById('bitacora-cancel').addEventListener('click', ()=>document.getElementById('bitacora-overlay').classList.remove('active'));
 document.getElementById('bitacora-save').addEventListener('click', async ()=>{
+  if(esRolSoloLectura()){ toast('Tu perfil de Visualización solo permite ver y exportar información.'); return; }
   const notaPredefId = document.getElementById('bitacora-nota-select').value || null;
   const notaLibre = document.getElementById('bitacora-nota-libre').value.trim() || null;
   if(!notaPredefId && !notaLibre){ toast('Selecciona una nota o escribe un comentario.'); return; }
@@ -1945,6 +1976,7 @@ async function cargarHistorialBulkNote(){
   }
 }
 async function openBulkNote(casoIds, modulo, subTitle){
+  if(esRolSoloLectura()){ toast('Tu perfil de Visualización solo permite ver y exportar información, no agregar notas.'); return; }
   bulkNoteCasoIds = casoIds; bulkNoteModulo = modulo;
   document.getElementById('bulknote-sub').textContent = subTitle || `${casoIds.length} caso(s) seleccionados`;
   document.getElementById('bulknote-nota-select').innerHTML = '<option value="">Cargando notas...</option>';
@@ -1960,6 +1992,7 @@ async function openBulkNote(casoIds, modulo, subTitle){
 }
 document.getElementById('bulknote-cancel').addEventListener('click', ()=>document.getElementById('bulknote-overlay').classList.remove('active'));
 document.getElementById('bulknote-save').addEventListener('click', async ()=>{
+  if(esRolSoloLectura()){ toast('Tu perfil de Visualización solo permite ver y exportar información.'); return; }
   const notaPredefId = document.getElementById('bulknote-nota-select').value || null;
   const notaLibre = document.getElementById('bulknote-nota-libre').value.trim() || null;
   if(!notaPredefId && !notaLibre){ toast('Selecciona una nota o escribe un comentario.'); return; }
@@ -1983,6 +2016,7 @@ document.getElementById('bulknote-save').addEventListener('click', async ()=>{
    ============================================================ */
 let transferCasoIds = [], transferModuloOrigen = null;
 function openTransfer(casoIds, moduloOrigen, subTitle){
+  if(esRolSoloLectura()){ toast('Tu perfil de Visualización solo permite ver y exportar información, no transferir casos.'); return; }
   transferCasoIds = casoIds; transferModuloOrigen = moduloOrigen;
   document.getElementById('transfer-sub').textContent = subTitle || (casoIds.length+' registro(s) seleccionados');
   document.getElementById('transfer-nota').value='';
@@ -2080,6 +2114,7 @@ function revertirTransferenciaOptimista(respaldo){
 }
 
 document.getElementById('transfer-save').addEventListener('click', async ()=>{
+  if(esRolSoloLectura()){ toast('Tu perfil de Visualización solo permite ver y exportar información.'); return; }
   const btnGuardar = document.getElementById('transfer-save');
   if(btnGuardar.disabled) return; // ya se procesó este clic (protección contra doble clic)
   const nota = document.getElementById('transfer-nota').value.trim();
@@ -2408,7 +2443,24 @@ async function refreshResumen(forzar, silencioso){
   renderResumenInsights();
   renderResumenActivity();
   renderUltimaActualizacionInforme();
+  renderFiltrosBodegaConvenioResumen();
   if(!document.getElementById('rs-hist-toggle').checked) renderResumenTable();
+}
+// Filtros de Bodega/Convenio para "Exportar reporte" e "Indicadores" --
+// mismo patrón de multiselect que ya usa Abastecimiento. Las opciones salen
+// de los casos activos de los 3 módulos (ya cargados en resumenCache); no
+// bloquea nada si un convenio o bodega solo aparece en casos ya cerrados,
+// pero cubre el caso normal de uso.
+let rsExpBodegaSet = new Set(), rsExpConvenioSet = new Set();
+let indBodegaSet = new Set(), indConvenioSet = new Set();
+function renderFiltrosBodegaConvenioResumen(){
+  const casosBase = resumenCache ? resumenCache.casos : [];
+  const bodegas = [...new Set(casosBase.map(r=>String(r.bodega_id)))].sort();
+  const convenios = [...new Set(casosBase.flatMap(r=>conveniosDe(r.cuenta)))].sort();
+  multiSelect('rs-exp-ms-bodega', 'Bodega', bodegas, rsExpBodegaSet, ()=>{}, bodegaLabel);
+  multiSelect('rs-exp-ms-convenio', 'Convenio', convenios, rsExpConvenioSet, ()=>{});
+  multiSelect('ind-ms-bodega', 'Bodega', bodegas, indBodegaSet, refreshIndicadores, bodegaLabel);
+  multiSelect('ind-ms-convenio', 'Convenio', convenios, indConvenioSet, refreshIndicadores);
 }
 
 /* ---------- Exportar CSV — celdas siempre entre comillas y con protección
@@ -2468,7 +2520,12 @@ document.getElementById('rs-exportar').addEventListener('click', async ()=>{
     if(desde) qs.push('fecha_desde='+desde);
     if(hasta) qs.push('fecha_hasta='+hasta);
     if(qs.length) path += '?' + qs.join('&');
-    const filas = await apiGet(path);
+    let filas = await apiGet(path);
+    // Bodega/Convenio se filtran aquí (no en el backend) porque este
+    // endpoint ya trae TODO el histórico -- acotar antes de exportar es
+    // justo lo que se necesita para un reporte por bodega o por convenio.
+    if(rsExpBodegaSet.size) filas = filas.filter(r=>rsExpBodegaSet.has(String(r.bodega_id)));
+    if(rsExpConvenioSet.size) filas = filas.filter(r=>conveniosDe(r.cuenta).some(c=>rsExpConvenioSet.has(c)));
     await exportarCSV('reporte_faltantes.csv', [
       // ---- Identificación del caso ----
       ['Módulo actual', r=>MODULE_LABELS[r.modulo_actual]||r.modulo_actual],
@@ -2645,7 +2702,7 @@ function renderUsuariosAdmin(usuarios){
     <tbody>${usuarios.map(u=>`<tr>
       <td>${esc(u.nombre)}</td>
       <td>${u.usuario_login?esc(u.usuario_login):'—'}</td>
-      <td>${u.rol==='admin'?'Administrador':esc(MODULE_LABELS[u.rol]||u.rol)}</td>
+      <td>${u.rol==='admin'?'Administrador':u.rol==='Visualizacion'?'Visualización':esc(MODULE_LABELS[u.rol]||u.rol)}</td>
       <td>${u.modulo_asignado ? esc(MODULE_LABELS[u.modulo_asignado]||u.modulo_asignado) : '<span style="color:var(--muted);">—</span>'}</td>
       <td>${siNoBadge(!!u.activo)}</td>
       <td>${fechaCorta(u.fecha_creacion)}</td>
@@ -3020,6 +3077,8 @@ async function refreshIndicadores(){
   const qs = [];
   if(desde) qs.push('fecha_desde='+desde);
   if(hasta) qs.push('fecha_hasta='+hasta);
+  if(indBodegaSet.size) qs.push('bodegas='+encodeURIComponent([...indBodegaSet].join(',')));
+  if(indConvenioSet.size) qs.push('convenios='+encodeURIComponent([...indConvenioSet].join(',')));
   if(qs.length) path += '?' + qs.join('&');
   try{
     indicadoresCache = await apiGet(path);
@@ -5096,11 +5155,15 @@ async function ldbResumenGestion(){
     por_modulo:porModulo, casos, actividad_reciente:actividadReciente};
 }
 
-async function ldbIndicadores(fechaDesde, fechaHasta){
+async function ldbIndicadores(fechaDesde, fechaHasta, bodegas, convenios){
   const todos = await ldbTodosCasosEnriquecidos();
+  const bodegaSet = bodegas && bodegas.length ? new Set(bodegas.map(String)) : null;
+  const convenioSet = convenios && convenios.length ? new Set(convenios) : null;
   const enRango = c=>{
     if(fechaDesde && f10Local(c.fecha_creacion) < fechaDesde) return false;
     if(fechaHasta && f10Local(c.fecha_creacion) > fechaHasta) return false;
+    if(bodegaSet && !bodegaSet.has(String(c.bodega_id))) return false;
+    if(convenioSet && !conveniosDe(c.cuenta).some(cv=>convenioSet.has(cv))) return false;
     return true;
   };
   const casos = todos.filter(enRango);
@@ -5329,7 +5392,7 @@ async function ldbDetalleSku(codigo, fechaDesde, fechaHasta){
    resto de la app (leerTabla/agregarFila/patchFilaIndice sobre las
    columnas ya definidas en COLUMNAS_TABLA, sin tocar el esquema del
    Excel). */
-const ROLES_VALIDOS = ['admin','CNG','Abastecimiento','Aliados'];
+const ROLES_VALIDOS = ['admin','CNG','Abastecimiento','Aliados','Visualizacion'];
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function ldbValidarRol(rol){
   if(!ROLES_VALIDOS.includes(rol)) throw new Error(`Rol inválido: ${rol}. Debe ser uno de: ${ROLES_VALIDOS.join(', ')}.`);
@@ -5340,7 +5403,9 @@ function ldbModuloParaRol(rol, moduloAsignado){
   // rol y módulo comparten el mismo nombre (CNG/Abastecimiento/Aliados) --
   // salvo que se indique explícitamente otro valor.
   if(moduloAsignado !== undefined) return moduloAsignado || null;
-  return rol === 'admin' ? null : rol;
+  // "Visualizacion" tampoco queda atado a un módulo -- igual que admin, ve
+  // todo (solo que sin poder editar nada).
+  return (rol === 'admin' || rol === 'Visualizacion') ? null : rol;
 }
 
 /* ---------- Notas predefinidas (admin) ---------- */
@@ -5447,7 +5512,7 @@ async function apiGet(path){
   if(base==='resumen') return ldbResumenGestion();
   if(base==='admin/notas'){ _asegurarAdmin(); return ldbListarNotasAdmin(); }
   if(base==='admin/usuarios'){ _asegurarAdmin(); return ldbListarUsuarios(); }
-  if(base==='indicadores') return ldbIndicadores(qs.fecha_desde, qs.fecha_hasta);
+  if(base==='indicadores') return ldbIndicadores(qs.fecha_desde, qs.fecha_hasta, qs.bodegas?qs.bodegas.split(','):null, qs.convenios?qs.convenios.split(','):null);
   if(base==='indicadores/sku') return ldbDetalleSku(qs.codigo||'', qs.fecha_desde, qs.fecha_hasta);
   if(base==='exportar-casos') return ldbExportarCasos(qs.fecha_desde, qs.fecha_hasta);
   if(base==='casos'){
@@ -6044,15 +6109,26 @@ function cerrarSesion(){
   }
 }
 
-// Mapa de rol -> qué puede ver en el menú. admin ve todo.
+// Mapa de rol -> qué puede ver en el menú. admin ve todo. Visualizacion ve
+// todos los módulos de datos (igual que admin) pero SIN Cargar Datos --
+// es un rol de solo lectura, nunca administra la carga.
 const NAV_POR_ROL = {
   admin: null, // null = sin restricción, ve todo
   CNG: ['home', 'resumen', 'cng'],
   Abastecimiento: ['home', 'resumen', 'abast'],
   Aliados: ['home', 'resumen', 'aliados'],
+  Visualizacion: ['home', 'resumen', 'cng', 'abast', 'aliados'],
 };
+// Rol de solo lectura: puede ver y exportar todo, pero no agregar notas de
+// gestión ni transferir casos entre módulos. Centralizar esto en una sola
+// función evita tener que repetir el chequeo en cada botón de cada tabla.
+function esRolSoloLectura(sesion){
+  const s = sesion || getSesion();
+  return !!(s && s.rol === 'Visualizacion');
+}
 function aplicarRestriccionesDeRol(sesion){
   const permitidos = NAV_POR_ROL[sesion.rol];
+  document.body.classList.toggle('rol-lectura', esRolSoloLectura(sesion));
   document.querySelectorAll('.nav-item').forEach(el=>{
     const goto = el.dataset.goto;
     const visible = !permitidos || permitidos.includes(goto);
@@ -6086,6 +6162,19 @@ function ocultarLogin(){
 function ocultarBoot(){
   const el = document.getElementById('boot-overlay');
   if(el) el.classList.add('oculto');
+}
+// El texto de la pantalla de arranque va cambiando según el paso real que
+// está corriendo (no es decorativo) -- así, aunque la espera de red no se
+// pueda acortar más, al menos se ve claramente que SÍ está pasando algo
+// (verificando la sesión, trayendo los datos actualizados), no una pantalla
+// pegada sin explicación.
+function bootStatus(texto){
+  const el = document.getElementById('boot-status');
+  if(!el) return;
+  el.textContent = texto;
+  el.classList.remove('fx');
+  void el.offsetWidth; // fuerza a reiniciar la animación aunque cambie seguido
+  el.classList.add('fx');
 }
 
 function openInfoConexion(){
@@ -6133,13 +6222,22 @@ document.getElementById('login-entrar').addEventListener('click', intentarLoginM
 // botón, pero disparados automáticamente al volver de la redirección.
 async function completarLoginTrasRedirect(){
   try{
+    bootStatus('Conectando con SharePoint…');
     await resolverArchivoExcel();
     const sesion = await ldbVerificarLoginMicrosoft();
     setSesion(sesion);
     aplicarRestriccionesDeRol(sesion);
-    await Promise.all([recomputeHome(), cargarNotificaciones(), renderUltimaActualizacionInforme()]);
+    // Solo se espera lo estrictamente necesario para que el panel general no
+    // se vea en 0 (recomputeHome) -- la campanita de notificaciones y el
+    // indicador de "informe actualizado" del encabezado siguen cargando
+    // solos, sin bloquear la entrada a la app (ambos tienen su propio
+    // estado vacío bien manejado, no hace falta esperarlos).
+    bootStatus('Actualizando tus datos…');
+    await recomputeHome();
     aplicarRestriccionAdminCargarDatos();
     ocultarLogin();
+    cargarNotificaciones();
+    renderUltimaActualizacionInforme();
     toast(`Bienvenido, ${sesion.nombre}.`, true);
   } catch(err){
     mostrarLogin(err.message || 'No se pudo completar el inicio de sesión con Microsoft.');
@@ -6151,6 +6249,7 @@ async function completarLoginTrasRedirect(){
 // de loginRedirect) pero aún no hay sesión de app, se completa sola.
 async function iniciarAppLocal(){
   try{
+    bootStatus('Verificando tu sesión…');
     await inicializarDB();
     actualizarEstadoConexion();
     if(!DB_DISPONIBLE){
@@ -6161,13 +6260,18 @@ async function iniciarAppLocal(){
     if(sesion && msalCuenta){
       try{ await resolverArchivoExcel(); } catch(e){ mostrarLogin(e.message); return; }
       aplicarRestriccionesDeRol(sesion);
-      // Se esperan estas cargas (en paralelo) ANTES de quitar la pantalla de
-      // arranque -- así, quien recarga la página o vuelve a entrar nunca ve
-      // los contadores del panel general en 0 momentáneamente: la app solo
-      // se revela con los datos reales ya puestos.
-      await Promise.all([recomputeHome(), cargarNotificaciones(), renderUltimaActualizacionInforme()]);
+      // Solo se espera recomputeHome antes de quitar la pantalla de arranque
+      // -- es lo único que, si no se espera, se vería en 0 un instante (los
+      // contadores del panel general). La campanita de notificaciones y el
+      // indicador de "informe actualizado" no bloquean la entrada: siguen
+      // cargando solos apenas se revela la app, para que sea lo más ágil
+      // posible sin perder el efecto de "ya llegó con los datos puestos".
+      bootStatus('Actualizando tus datos…');
+      await recomputeHome();
       aplicarRestriccionAdminCargarDatos();
       ocultarLogin();
+      cargarNotificaciones();
+      renderUltimaActualizacionInforme();
       // La sesión guardada en localStorage puede estar desactualizada -- si un
       // administrador desactivó a este usuario o le cambió el rol en la hoja
       // "Usuarios" del Excel después de que este navegador inició sesión, no
