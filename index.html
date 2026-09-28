@@ -703,9 +703,12 @@ License: MIT
 
       <!-- ============ RESUMEN DE GESTIÓN ============ -->
       <div class="view" id="view-resumen">
-        <div class="subtabs" id="resumen-subtabs">
-          <button class="subtab active" data-tab="resumen">Resumen</button>
-          <button class="subtab" data-tab="indicadores">Indicadores</button>
+        <div class="subtabs" id="resumen-subtabs" style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <button class="subtab active" data-tab="resumen">Resumen</button>
+            <button class="subtab" data-tab="indicadores">Indicadores</button>
+          </div>
+          <div class="ultima-actualizacion-informe" style="font-size:12px;color:var(--muted,#888);white-space:nowrap;"></div>
         </div>
 
         <div id="resumen-tab-resumen" class="resumen-tab-content">
@@ -872,6 +875,7 @@ License: MIT
         <div class="panel">
           <div class="panel-head">
             <div><h2>CNG</h2><div class="legend-modulo">Faltantes con novedad</div><div class="desc">Expande cada molécula para ver el detalle por paciente en todas las bodegas</div></div>
+            <div class="ultima-actualizacion-informe" style="font-size:12px;color:var(--muted,#888);white-space:nowrap;"></div>
           </div>
           <div id="cng-table"></div>
         </div>
@@ -900,6 +904,7 @@ License: MIT
           <div class="panel-head">
             <div><h2>Abastecimiento</h2><div class="legend-modulo">Faltantes sin novedad</div><div class="desc">Todos los campos visibles en la misma tabla, sin expandir</div></div>
             <div class="bulkbar">
+              <span class="ultima-actualizacion-informe" style="font-size:12px;color:var(--muted,#888);white-space:nowrap;"></span>
               <span id="ab-usuario-actual"></span>
               <button class="btn-ghost" id="ab-limpiar">Limpiar filtros</button>
               <button class="btn-ghost" id="ab-exportar">+ Exportar</button>
@@ -935,7 +940,7 @@ License: MIT
           <div class="kpi vencidas"><div class="lbl">Sin gestionar</div><div class="val" id="al-sinbit">0</div><div class="trend">sin ninguna nota todavía</div></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="legend-modulo">Gestión de alternativas</div><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div></div>
+          <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="legend-modulo">Gestión de alternativas</div><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div><div class="ultima-actualizacion-informe" style="font-size:12px;color:var(--muted,#888);white-space:nowrap;"></div></div>
           <div id="al-table"></div>
         </div>
       </div>
@@ -1653,6 +1658,20 @@ function fechaCorta(f){
     return `${String(d).padStart(2,'0')} ${MESES_CORTOS[m-1]} ${y}`;
   } catch(e){ return f; }
 }
+// Para timestamps reales completos (fecha Y hora, con zona) -- a diferencia
+// de fechaCorta() de arriba, aquí SÍ conviene usar Date normal: no hay
+// ambigüedad de "medianoche UTC" porque el timestamp trae la hora real, y
+// el navegador la convierte correctamente a la hora local de quien mira.
+function fechaHoraCorta(f){
+  if(!f) return '';
+  try{
+    const d = new Date(f);
+    if(isNaN(d.getTime())) return '';
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    return `${String(d.getDate()).padStart(2,'0')} ${MESES_CORTOS[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
+  } catch(e){ return ''; }
+}
 function novedadConFecha(caso){
   // "Agotado" sin fecha estimada no es un agotado confirmado -- es un caso
   // sin una novedad clara en la fuente de datos. Mostrarlo como "Agotado"
@@ -2321,6 +2340,7 @@ async function refreshResumen(forzar, silencioso){
   renderResumenKpis();
   renderResumenInsights();
   renderResumenActivity();
+  renderUltimaActualizacionInforme();
   if(!document.getElementById('rs-hist-toggle').checked) renderResumenTable();
 }
 
@@ -4231,6 +4251,56 @@ function f10(f){ return f ? String(f).slice(0,10) : ''; }
 // de hoy" y los rangos de fecha en Indicadores/exportar usaban f10() sobre
 // fecha_creacion y se veían desfasados justo en esas horas.
 function f10Local(f){ return f ? fechaLocalStr(f) : ''; }
+
+/* ---------- Última actualización del informe (visible para todas las
+   personas que usan la app, no solo en el navegador de quien cargó) ----------
+   Se guarda en la propiedad "description" del propio archivo de Excel en
+   SharePoint -- así cualquiera que abra la app ve la MISMA fecha/hora sin
+   depender de localStorage (que es por navegador). A propósito NO se usa
+   lastModifiedDateTime del archivo: ese campo cambia con CUALQUIER escritura
+   (una nota de bitácora, una transferencia, un cambio de responsable...), no
+   solo con la carga de un informe nuevo -- mostraría una fecha equivocada
+   casi todo el tiempo. Escribiendo nuestra propia marca solo en el momento
+   exacto de guardar una carga real, queda un dato confiable. */
+let _ultimaActualizacionCache = undefined;
+async function guardarUltimaActualizacionInforme(nombreUsuario){
+  const marca = {fecha: ldbAhora(), usuario: nombreUsuario || ''};
+  try{
+    await graphFetch(`/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}`, {
+      method:'PATCH', body: JSON.stringify({description: JSON.stringify(marca)}),
+    });
+    _ultimaActualizacionCache = marca;
+  }catch(e){
+    // No se deja que un fallo aquí tumbe la carga real de datos -- si esto
+    // falla, los casos/pacientes ya se guardaron bien; solo se pierde el
+    // aviso de "última actualización" y queda para el próximo intento.
+    console.error('No se pudo guardar la marca de última actualización del informe:', e);
+  }
+}
+async function obtenerUltimaActualizacionInforme(forzar){
+  if(!forzar && _ultimaActualizacionCache !== undefined) return _ultimaActualizacionCache;
+  try{
+    const item = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}?$select=description`);
+    _ultimaActualizacionCache = (item && item.description) ? JSON.parse(item.description) : null;
+  }catch(e){
+    _ultimaActualizacionCache = null;
+  }
+  return _ultimaActualizacionCache;
+}
+async function renderUltimaActualizacionInforme(forzar){
+  // Un solo dato compartido (obtenerUltimaActualizacionInforme cachea la
+  // lectura a Graph), pero se muestra en TODAS las esquinas que lo tengan:
+  // el panel Resumen y cada una de las ventanas de trabajo (CNG,
+  // Abastecimiento, Aliados) -- así quien está gestionando un módulo ve de
+  // una vez cuándo fue la última carga, sin tener que ir a Resumen.
+  const els = document.querySelectorAll('.ultima-actualizacion-informe');
+  if(!els.length) return;
+  const info = await obtenerUltimaActualizacionInforme(forzar);
+  const texto = (info && info.fecha)
+    ? `Informe actualizado: ${fechaHoraCorta(info.fecha)}${info.usuario ? ' · '+esc(info.usuario) : ''}`
+    : '';
+  els.forEach(el=> el.textContent = texto);
+}
 function ldbMesesEntre(mesInicio, mesFin){
   const meses = [];
   let [y,m] = mesInicio.split('-').map(Number);
@@ -5553,6 +5623,13 @@ async function ejecutarIngestaLocal(files, guardar){
     invalidarCacheTablas(SP_ITEM_ID, 'TablaCasos');
   }
 
+  // Se deja registrada la marca de "última actualización del informe" -- se
+  // ve en una esquina del panel Resumen para que todas las personas (no solo
+  // quien cargó) sepan cuándo fue la última carga real de datos. Va al final,
+  // después de que todo lo demás ya se guardó bien.
+  const sesionActual = getSesion();
+  await guardarUltimaActualizacionInforme(sesionActual ? sesionActual.nombre : '');
+
   return {nuevos_insertados:nIns, casos_actualizados:nUpd, casos_cerrados:nCerr,
     filas_pacientes_cargadas:nPac, reasignados_de_modulo:reasignados, guardado:true,
     advertencias: erroresParciales};
@@ -5672,6 +5749,7 @@ async function completarLoginTrasRedirect(){
     recomputeHome();
     cargarNotificaciones();
     aplicarRestriccionAdminCargarDatos();
+    renderUltimaActualizacionInforme();
     toast(`Bienvenido, ${sesion.nombre}.`, true);
   } catch(err){
     mostrarLogin(err.message || 'No se pudo completar el inicio de sesión con Microsoft.');
@@ -5696,6 +5774,7 @@ async function iniciarAppLocal(){
     recomputeHome();
     cargarNotificaciones();
     aplicarRestriccionAdminCargarDatos();
+    renderUltimaActualizacionInforme();
     // La sesión guardada en localStorage puede estar desactualizada -- si un
     // administrador desactivó a este usuario o le cambió el rol en la hoja
     // "Usuarios" del Excel después de que este navegador inició sesión, no
@@ -5861,7 +5940,7 @@ document.getElementById('carga-procesar').addEventListener('click', async ()=>{
       ${ensayo ? '<br><br>Si estos números se ven bien, desmarca "Modo ensayo" arriba y vuelve a procesar para guardar de verdad.' : ''}${advertencias}
     </div>`;
     toast(ensayo ? 'Ensayo completado.' : 'Datos guardados.', true);
-    if(!ensayo) invalidarCacheDatos();
+    if(!ensayo){ invalidarCacheDatos(); renderUltimaActualizacionInforme(true); }
   } catch(err){
     // Si el error ocurrió durante el guardado real (no en el ensayo), es
     // posible que parte de la carga ya se haya escrito antes del corte --
