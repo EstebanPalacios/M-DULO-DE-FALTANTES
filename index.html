@@ -469,6 +469,7 @@
     .search-trigger{flex:1 1 auto;}
     .kpis{grid-template-columns:1fr;}
     .filters{flex-direction:column;align-items:stretch;}
+    header .ultima-actualizacion-informe{display:none;}
   }
 
   /* ---------- Impresión — antes salía la app completa (barra lateral,
@@ -533,6 +534,7 @@ License: MIT
         <div><h1 id="page-title">Panel general</h1><div class="crumbs" id="crumbs">Gestión de faltantes</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
+        <div class="ultima-actualizacion-informe" style="font-size:11.5px;color:var(--muted);white-space:nowrap;"></div>
         <button id="global-search-btn" class="search-trigger" aria-label="Buscar código, paciente o responsable">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
           Buscar código, paciente, responsable...
@@ -4209,10 +4211,78 @@ async function actualizarFilaPorIdEn(driveId, itemId, tabla, cols, idCampo, idVa
   if(!fila) throw new Error(`No se encontró la fila con ${idCampo}=${idValor} en ${tabla}.`);
   return patchFilaIndiceEn(driveId, itemId, tabla, cols, fila, cambios);
 }
+/* ---------- PATCH en lote vía /$batch de Graph ----------
+   patchFilaIndiceEn hace UNA llamada HTTP por fila -- para actualizar los
+   cientos de casos "que continúan" o "se cierran" en una carga normal, eso
+   eran cientos de idas y vueltas SECUENCIALES a Microsoft, una tras otra, y
+   esa espera acumulada (no el guardado en sí) era la causa real de que una
+   carga completa tardara varios minutos. Graph permite empaquetar hasta 20
+   solicitudes en una sola llamada a /$batch -- se manda la sesión del libro
+   una sola vez por lote, y las 20 PATCH se resuelven del lado de Microsoft
+   en paralelo, no una por una por la red. */
+const GRAPH_BATCH_TAM = 20;
+async function graphFetchWBBatch(driveId, itemId, subrequests){
+  if(!subrequests || !subrequests.length) return [];
+  let sesionId = await _sesionExcel(driveId, itemId);
+  const resultados = new Array(subrequests.length);
+  for(let i=0; i<subrequests.length; i+=GRAPH_BATCH_TAM){
+    const trozo = subrequests.slice(i, i+GRAPH_BATCH_TAM);
+    const armar = (sid)=>({
+      requests: trozo.map((sr, idx)=>({
+        id: String(idx),
+        method: sr.method || 'PATCH',
+        url: sr.path,
+        headers: {'Content-Type':'application/json', ...(sid?{'workbook-session-id':sid}:{})},
+        body: sr.body,
+      })),
+    });
+    let r = await graphFetch('/$batch', {method:'POST', body: JSON.stringify(armar(sesionId))});
+    let respuestas = r.responses || [];
+    // Si la sesión guardada ya expiró, Graph responde con error de sesión en
+    // CADA subsolicitud del lote -- se detecta, se crea una sesión nueva y
+    // se reintenta ese mismo lote una vez (igual que hace graphFetchWB con
+    // una sola solicitud).
+    const huboErrorSesion = respuestas.some(resp=> resp.status>=400 &&
+      /InvalidSession|SessionNotFound/i.test(JSON.stringify(resp.body && resp.body.error || '')));
+    if(huboErrorSesion){
+      delete SP_SESIONES[itemId];
+      sesionId = await _sesionExcel(driveId, itemId);
+      r = await graphFetch('/$batch', {method:'POST', body: JSON.stringify(armar(sesionId))});
+      respuestas = r.responses || [];
+    }
+    const porId = {};
+    respuestas.forEach(resp=>{ porId[resp.id] = resp; });
+    trozo.forEach((sr, idx)=>{
+      const resp = porId[String(idx)];
+      const ok = resp && resp.status>=200 && resp.status<300;
+      resultados[i+idx] = ok
+        ? {ok:true, body: resp.body}
+        : {ok:false, error: (resp && resp.body && resp.body.error && resp.body.error.message) || 'sin respuesta de Microsoft'};
+    });
+  }
+  return resultados;
+}
+async function patchFilasEnLoteEn(driveId, itemId, tabla, cols, items){
+  // items: [{filaConIndice, cambios}] -- misma forma que usa patchFilaIndiceEn
+  if(!items || !items.length) return [];
+  const subrequests = items.map(({filaConIndice, cambios})=>{
+    const combinado = {...filaConIndice, ...cambios};
+    delete combinado._indice;
+    return {
+      method: 'PATCH',
+      path: `/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows/itemAt(index=${filaConIndice._indice})`,
+      body: JSON.stringify({values: [objetoAFilaCols(cols, combinado)]}),
+    };
+  });
+  const resultados = await graphFetchWBBatch(driveId, itemId, subrequests);
+  invalidarCacheTablas(itemId, tabla);
+  return resultados;
+}
 // Atajos para el archivo PRINCIPAL (Casos/Pacientes/Transferencias/Usuarios/Notas)
 async function leerTabla(tabla, forzar){ return leerTablaEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], forzar); }
 async function agregarFila(tabla, obj){ return agregarFilaEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], obj); }
 async function agregarFilas(tabla, objs){ return agregarFilasEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], objs); }
+async function patchFilasEnLote(tabla, items){ return patchFilasEnLoteEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], items); }
 async function actualizarFilaPorId(tabla, idCampo, idValor, cambios){ return actualizarFilaPorIdEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], idCampo, idValor, cambios); }
 async function patchFilaIndice(tabla, filaConIndice, cambios, opciones){ return patchFilaIndiceEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], filaConIndice, cambios, opciones); }
 
@@ -4529,14 +4599,10 @@ async function ldbAgregarBitacoraLote(casoIds, modulo, notaPredefinidaId, notaLi
     ultima_bitacora_nota_predefinida_id: notaPredefinidaId||'', ultima_bitacora_nota_libre: notaLibre||'',
     ultima_bitacora_usuario_id: usuarioId,
   };
-  let afectados = 0;
-  for(const casoId of idsUnicos){
-    const fila = porId.get(casoId);
-    if(!fila) continue;
-    await patchFilaIndice('TablaCasos', fila, cambiosComunes, {sinInvalidar:true});
-    afectados++;
-  }
-  invalidarCacheTablas(SP_ITEM_ID, 'TablaCasos');
+  const itemsPatch = idsUnicos.map(casoId=>porId.get(casoId)).filter(Boolean)
+    .map(fila=>({filaConIndice: fila, cambios: cambiosComunes}));
+  const resultados = await patchFilasEnLote('TablaCasos', itemsPatch);
+  const afectados = resultados.filter(r=>r.ok).length;
   return {ok:true, casos_afectados: afectados};
 }
 /* ---------- Marcar como visto el badge "Transferido" -- OJO: esto NO es
@@ -4553,14 +4619,10 @@ async function ldbMarcarTransferidoVisto(casoIds){
   // relectura completa por cada caso marcado como visto.
   const casosFrescos = await leerTabla('TablaCasos', true);
   const porId = new Map(casosFrescos.map(c=>[String(c.caso_id), c]));
-  let afectados = 0;
-  for(const casoId of idsUnicos){
-    const fila = porId.get(casoId);
-    if(!fila) continue;
-    await patchFilaIndice('TablaCasos', fila, {ultima_bitacora_fecha: ahora}, {sinInvalidar:true});
-    afectados++;
-  }
-  invalidarCacheTablas(SP_ITEM_ID, 'TablaCasos');
+  const itemsPatch = idsUnicos.map(casoId=>porId.get(casoId)).filter(Boolean)
+    .map(fila=>({filaConIndice: fila, cambios: {ultima_bitacora_fecha: ahora}}));
+  const resultados = await patchFilasEnLote('TablaCasos', itemsPatch);
+  const afectados = resultados.filter(r=>r.ok).length;
   return {ok:true, casos_afectados: afectados};
 }
 async function ldbNotasPredefinidas(modulo){
@@ -5602,12 +5664,18 @@ async function ejecutarIngestaLocal(files, guardar){
   if(pacientesDesactivarBatch.length){
     const pacientesFrescos = await leerTabla('TablaPacientes', true);
     const porIdPac = new Map(pacientesFrescos.map(p=>[String(p.paciente_row_id), p]));
+    const items = [];
     for(const {paciente_row_id} of pacientesDesactivarBatch){
       const filaFresca = porIdPac.get(String(paciente_row_id));
       if(!filaFresca){ erroresParciales.push(`Paciente ${paciente_row_id} ya no se encontro al guardar (posible edicion simultanea) -- se omitio.`); continue; }
-      await patchFilaIndice('TablaPacientes', filaFresca, {activo:false}, {sinInvalidar:true});
+      items.push({filaConIndice: filaFresca, cambios: {activo:false}});
     }
-    invalidarCacheTablas(SP_ITEM_ID, 'TablaPacientes');
+    // Antes: una llamada PATCH por paciente, una tras otra. Ahora se manda
+    // en lotes de hasta 20 por una sola llamada a Graph -- con cientos de
+    // pacientes por desactivar, esto es lo que hacía que "Guardado
+    // correctamente" tardara varios minutos en vez de segundos.
+    const resultados = await patchFilasEnLote('TablaPacientes', items);
+    resultados.forEach((r,i)=>{ if(!r.ok) erroresParciales.push(`Paciente ${items[i].filaConIndice.paciente_row_id} no se pudo actualizar (${r.error}) -- se omitio.`); });
   }
 
   if(pacientesNuevosBatch.length) await agregarFilas('TablaPacientes', pacientesNuevosBatch);
@@ -5615,12 +5683,17 @@ async function ejecutarIngestaLocal(files, guardar){
   if(casosActualizarBatch.length){
     const casosFrescos = await leerTabla('TablaCasos', true);
     const porIdCaso = new Map(casosFrescos.map(c=>[String(c.caso_id), c]));
+    const items = [];
     for(const {caso_id, cambios} of casosActualizarBatch){
       const filaFresca = porIdCaso.get(String(caso_id));
       if(!filaFresca){ erroresParciales.push(`Caso ${caso_id} ya no se encontro al guardar (posible edicion simultanea) -- se omitio.`); continue; }
-      await patchFilaIndice('TablaCasos', filaFresca, cambios, {sinInvalidar:true});
+      items.push({filaConIndice: filaFresca, cambios});
     }
-    invalidarCacheTablas(SP_ITEM_ID, 'TablaCasos');
+    // Mismo cambio que arriba: los casos "que continúan" o "se cierran" son
+    // habitualmente el grupo más grande de esta carga -- batching aquí es lo
+    // que más se nota en el tiempo total.
+    const resultados = await patchFilasEnLote('TablaCasos', items);
+    resultados.forEach((r,i)=>{ if(!r.ok) erroresParciales.push(`Caso ${items[i].filaConIndice.caso_id} no se pudo actualizar (${r.error}) -- se omitio.`); });
   }
 
   // Se deja registrada la marca de "última actualización del informe" -- se
