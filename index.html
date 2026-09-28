@@ -24,8 +24,9 @@
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Calibri,Roboto,Arial,sans-serif;
     background:
-      radial-gradient(circle at 6% 2%, rgba(13,148,136,.05), transparent 34%),
-      radial-gradient(circle at 96% 22%, rgba(30,36,51,.045), transparent 40%),
+      radial-gradient(circle at 6% 2%, rgba(13,148,136,.07), transparent 34%),
+      radial-gradient(circle at 96% 22%, rgba(30,36,51,.06), transparent 42%),
+      radial-gradient(circle at 30% 85%, rgba(217,119,6,.045), transparent 38%),
       linear-gradient(180deg, #F1F4F6 0%, #F7F8FA 260px, #F7F8FA 100%);
     background-attachment:fixed;
     color:var(--text);-webkit-font-smoothing:antialiased;}
@@ -266,8 +267,16 @@
   .area-wrap{padding:4px 2px 0;}
   .area-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:2px 8px 0;}
 
-  .kpi{border-radius:var(--radius);padding:16px 18px;background:var(--card);border:1px solid var(--border);border-left:3px solid var(--navy);position:relative;box-shadow:var(--shadow-sm);transition:.15s;overflow:hidden;}
-  .kpi:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
+  /* ---------- Tarjetas translúcidas (vidrio esmerilado) -- misma idea que
+     la pantalla de arranque, aplicada a las tarjetas de métricas (se
+     reutiliza .kpi en Panel general, CNG, Abastecimiento y Aliados, así que
+     este único cambio ya cubre los 4). Con @supports de respaldo para
+     navegadores sin backdrop-filter -- ahí se ven sólidas, como antes. */
+  .kpi{border-radius:var(--radius);padding:16px 18px;background:rgba(255,255,255,.62);backdrop-filter:blur(18px) saturate(165%);-webkit-backdrop-filter:blur(18px) saturate(165%);border:1px solid rgba(231,234,238,.75);border-left:3px solid var(--navy);position:relative;box-shadow:var(--shadow-sm);transition:transform .18s cubic-bezier(.16,1,.3,1),box-shadow .18s,background .18s;overflow:hidden;}
+  .kpi:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);background:rgba(255,255,255,.78);}
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+    .kpi{background:var(--card);}
+  }
   .kpi .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;color:var(--muted);}
   .kpi .val{font-size:27px;font-weight:800;margin-top:4px;letter-spacing:-.5px;color:var(--text);}
   .kpi .trend{font-size:11px;color:var(--muted);margin-top:3px;}
@@ -287,9 +296,12 @@
   .hg-hola{font-size:14px;font-weight:800;color:var(--navy);letter-spacing:-.1px;}
   .hg-date{font-size:10.5px;font-weight:600;color:var(--muted);margin-top:1px;text-transform:capitalize;}
   .cats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;}
-  .cat{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px 22px 20px;text-align:center;cursor:pointer;transition:transform .2s cubic-bezier(.16,1,.3,1),box-shadow .2s,border-color .2s;box-shadow:var(--shadow-sm);}
+  .cat{position:relative;overflow:hidden;background:rgba(255,255,255,.6);backdrop-filter:blur(18px) saturate(165%);-webkit-backdrop-filter:blur(18px) saturate(165%);border:1px solid rgba(231,234,238,.75);border-radius:var(--radius);padding:24px 22px 20px;text-align:center;cursor:pointer;transition:transform .2s cubic-bezier(.16,1,.3,1),box-shadow .2s,border-color .2s,background .2s;box-shadow:var(--shadow-sm);}
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+    .cat{background:var(--card);}
+  }
   .cat::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--cat-c1,var(--orange)),var(--cat-c2,var(--orange-dark)));}
-  .cat:hover,.cat:focus-visible{border-color:var(--cat-c1,var(--orange));transform:translateY(-4px);box-shadow:var(--shadow-lg);outline:none;}
+  .cat:hover,.cat:focus-visible{border-color:var(--cat-c1,var(--orange));transform:translateY(-4px);box-shadow:var(--shadow-lg);outline:none;background:rgba(255,255,255,.76);}
   .cat:hover .sub,.cat:focus-visible .sub{color:var(--cat-c2,var(--orange));}
   .cat:hover .arrow,.cat:focus-visible .arrow{transform:translateX(3px);}
   .cat-icon{width:44px;height:44px;margin:2px auto 14px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;background:linear-gradient(135deg,var(--cat-c1,var(--orange)),var(--cat-c2,var(--orange-dark)));box-shadow:0 4px 10px -2px color-mix(in srgb, var(--cat-c1, var(--orange)) 55%, transparent);}
@@ -613,9 +625,10 @@ License: MIT
       <!-- ============ HOME ============ -->
       <div class="view active" id="view-home">
         <div class="filters">
-          <div class="field"><label>Desde</label><input type="date" id="h-desde" value="2026-06-01"></div>
-          <div class="field"><label>Hasta</label><input type="date" id="h-hasta" value="2026-07-31"></div>
+          <div class="field"><label>Creados desde</label><input type="date" id="h-desde"></div>
+          <div class="field"><label>Creados hasta</label><input type="date" id="h-hasta"></div>
           <button class="btn-primary" id="h-consultar">Consultar</button>
+          <button class="btn-ghost" id="h-limpiar">Todo el histórico activo</button>
           <div class="home-greet" id="home-greet">
             <div class="hg-hola" id="hg-hola">Hola</div>
             <div class="hg-date" id="hg-date"></div>
@@ -2215,44 +2228,60 @@ async function recomputeHome(forzar){
   renderSaludoHome();
   const r = await obtenerResumenConCache(forzar);
   if(!r) return;
+  // "Creados desde/hasta" -- antes estos dos campos no filtraban nada (se
+  // mostraban con fechas fijas de ejemplo y el botón "Consultar" solo
+  // forzaba una recarga completa, sin usarlos para nada). Ahora sí acotan
+  // el panel a los casos activos creados en ese rango -- todo lo que sigue
+  // se calcula sobre "casos" (ya filtrado), nunca sobre r.casos directo.
+  const desde = document.getElementById('h-desde').value;
+  const hasta = document.getElementById('h-hasta').value;
+  const casos = (desde || hasta) ? r.casos.filter(c=>{
+    const f = f10Local(c.fecha_creacion);
+    if(desde && f < desde) return false;
+    if(hasta && f > hasta) return false;
+    return true;
+  }) : r.casos;
+  const totalActivos = casos.length;
+  const porModulo = {};
+  casos.forEach(c=>{ porModulo[c.modulo_actual] = (porModulo[c.modulo_actual]||0)+1; });
   const hoyStr = ldbHoy();
   // Vencidas/Hoy/Mayores a hoy se calculan sobre "fecha_entrega_antigua"
   // (la fecha comprometida de entrega que trae el informe de origen), no
   // sobre la fecha de la novedad -- son cosas distintas: la novedad dice
   // QUÉ pasó con el pedido, la fecha de entrega antigua dice CUÁNDO se
   // había prometido entregarlo.
-  const conFecha = r.casos.filter(c=>c.fecha_entrega_antigua);
+  const conFecha = casos.filter(c=>c.fecha_entrega_antigua);
   const vencidas = conFecha.filter(c=>c.fecha_entrega_antigua.slice(0,10) < hoyStr).length;
   const hoy = conFecha.filter(c=>c.fecha_entrega_antigua.slice(0,10) === hoyStr).length;
   const futuras = conFecha.filter(c=>c.fecha_entrega_antigua.slice(0,10) > hoyStr).length;
-  document.getElementById('h-total').textContent = formatoNum(r.total_activos);
+  document.getElementById('h-total').textContent = formatoNum(totalActivos);
   document.getElementById('h-vencidas').textContent = formatoNum(vencidas);
-  document.getElementById('h-vencidas-pct').textContent = (r.total_activos? Math.round(vencidas/r.total_activos*100):0)+'% del total';
+  document.getElementById('h-vencidas-pct').textContent = (totalActivos? Math.round(vencidas/totalActivos*100):0)+'% del total';
   document.getElementById('h-hoy').textContent = formatoNum(hoy);
   document.getElementById('h-futuras').textContent = formatoNum(futuras);
 
-  document.getElementById('h-c-CNG').textContent = formatoNum(r.por_modulo.CNG || 0);
-  document.getElementById('h-c-ABAST').textContent = formatoNum(r.por_modulo.Abastecimiento || 0);
-  document.getElementById('h-c-ALIADOS').textContent = formatoNum(r.por_modulo.Aliados || 0);
+  document.getElementById('h-c-CNG').textContent = formatoNum(porModulo.CNG || 0);
+  document.getElementById('h-c-ABAST').textContent = formatoNum(porModulo.Abastecimiento || 0);
+  document.getElementById('h-c-ALIADOS').textContent = formatoNum(porModulo.Aliados || 0);
 
   // Porcentaje de participación en cada tarjeta de módulo, para que la
   // tarjeta por sí sola diga "acá entra el X% de todo lo que hay activo"
   // (esto reemplaza al panel aparte de "Distribución por módulo" que había
   // antes -- mostraba la misma información dos veces).
-  const totalModulo = (r.por_modulo.CNG||0)+(r.por_modulo.Abastecimiento||0)+(r.por_modulo.Aliados||0);
+  const totalModulo = (porModulo.CNG||0)+(porModulo.Abastecimiento||0)+(porModulo.Aliados||0);
   ['CNG','Abastecimiento','Aliados'].forEach(m=>{
-    const v = r.por_modulo[m]||0;
+    const v = porModulo[m]||0;
     const pct = totalModulo>0 ? Math.round(v/totalModulo*100) : 0;
     const pctEl = document.getElementById('h-pct-'+m);
     if(pctEl) pctEl.textContent = pct+'% del total activo';
   });
 
   // Por tipo de novedad -- Agotado SOLO cuenta si tiene fecha real; sin fecha va a su propia categoría
-  const agotadoConFecha = r.casos.filter(c=>c.tipo_novedad==='Agotado' && c.fecha_novedad).length;
-  const sinNovedadClara = r.casos.filter(c=>c.tipo_novedad==='Agotado' && !c.fecha_novedad).length;
-  const descontinuados = r.casos.filter(c=>c.tipo_novedad==='Descontinuado').length;
-  const invima = r.casos.filter(c=>c.tipo_novedad==='Invima').length;
-  const transferidos = r.casos.filter(c=>c.transferido).length;
+  const agotadoConFecha = casos.filter(c=>c.tipo_novedad==='Agotado' && c.fecha_novedad).length;
+  const sinNovedadClara = casos.filter(c=>c.tipo_novedad==='Agotado' && !c.fecha_novedad).length;
+  const descontinuados = casos.filter(c=>c.tipo_novedad==='Descontinuado').length;
+  const invima = casos.filter(c=>c.tipo_novedad==='Invima').length;
+  const transferidos = casos.filter(c=>c.transferido).length;
   const tipoData = [
     ['Agotado', agotadoConFecha, ['#F87171','#B91C1C']],
     ['Sin novedad clara', sinNovedadClara, ['#B8BCC4','#6B7280']],
@@ -2267,7 +2296,16 @@ async function recomputeHome(forzar){
 
   aplicarRestriccionesHome();
 }
-document.getElementById('h-consultar').addEventListener('click', ()=>recomputeHome(true));
+// "Consultar" ya no fuerza una recarga completa contra SharePoint -- el
+// filtro de fecha se aplica sobre los datos que ya están en memoria (o los
+// trae si el caché venció por sí solo), así que aplicar el filtro es
+// instantáneo en vez de esperar otro viaje de red completo.
+document.getElementById('h-consultar').addEventListener('click', ()=>recomputeHome());
+document.getElementById('h-limpiar').addEventListener('click', ()=>{
+  document.getElementById('h-desde').value = '';
+  document.getElementById('h-hasta').value = '';
+  recomputeHome();
+});
 
 /* Bloquea el acceso a módulos ajenos desde las tarjetas del Panel general */
 function aplicarRestriccionesHome(){
@@ -4112,7 +4150,16 @@ async function graphFetch(path, opciones){
       if(r.status === 423) lanzar('El sistema está siendo actualizado por otra persona en este momento. Intenta de nuevo en unos segundos.');
       if(r.status === 429) lanzar('Hay demasiadas solicitudes al mismo tiempo (varias personas trabajando a la vez). Intenta de nuevo en unos segundos.');
       if(r.status === 401 || r.status === 403) lanzar('No tienes permisos suficientes para completar esta acción.');
-      if(r.status === 404) lanzar('No se encontró la información solicitada. Puede que ya haya cambiado -- intenta actualizar la página.');
+      if(r.status === 404){
+        // Si el 404 viene de nuestro propio archivo/drive cacheado en
+        // sessionStorage (resolverArchivoExcel), lo invalida -- así, aunque
+        // esta carga falle, la PRÓXIMA (F5) ya no repite el mismo error: se
+        // resuelve de nuevo por red en vez de insistir con un id viejo.
+        if(SP_ITEM_ID && url.includes(SP_ITEM_ID)){
+          try{ sessionStorage.removeItem(SP_RESOLVE_CACHE_KEY); } catch(e){}
+        }
+        lanzar('No se encontró la información solicitada. Puede que ya haya cambiado -- intenta actualizar la página.');
+      }
       if(r.status === 400 || r.status === 422) lanzar('Los datos enviados no son válidos. Revisa la información e intenta de nuevo.');
       lanzar('No se pudo completar la operación. Intenta de nuevo en unos minutos o comunícate con el administrador si el problema persiste.');
     }
@@ -4171,7 +4218,21 @@ async function graphFetchWB(driveId, itemId, path, opciones){
 /* Resuelve el link de la carpeta compartida a un driveId real, y
    ubica el archivo Excel principal dentro. Se hace UNA vez por sesión. */
 let SP_FOLDER_ID_RAIZ = null;
+// Esta resolución (link compartido -> driveId/itemId reales) es un viaje de
+// red completo que, hasta ahora, se repetía en CADA F5 -- pero el drive/item
+// no cambian salvo que alguien mueva o renombre el archivo (algo raro), así
+// que se guarda en sessionStorage (dura solo mientras la pestaña sigue
+// abierta, igual que hace MSAL con su propio caché) y un refresh normal se
+// ahorra por completo esta llamada.
+const SP_RESOLVE_CACHE_KEY = 'faltantes_sp_resolve_v1';
 async function resolverArchivoExcel(){
+  try{
+    const cache = JSON.parse(sessionStorage.getItem(SP_RESOLVE_CACHE_KEY) || 'null');
+    if(cache && cache.driveId && cache.itemId){
+      SP_DRIVE_ID = cache.driveId; SP_ITEM_ID = cache.itemId; SP_FOLDER_ID_RAIZ = cache.folderId || null;
+      return;
+    }
+  } catch(e){ /* sessionStorage no disponible o corrupto -- se resuelve por red como antes */ }
   const b64 = btoa(unescape(encodeURIComponent(SP_CONFIG.shareUrl)))
     .replace(/=+$/,'').replace(/\//g,'_').replace(/\+/g,'-');
   const shareId = 'u!' + b64;
@@ -4183,6 +4244,9 @@ async function resolverArchivoExcel(){
     throw new Error('No se pudo encontrar la fuente de datos configurada para la aplicación. Comunícate con el administrador.');
   }
   SP_ITEM_ID = archivo.id;
+  try{
+    sessionStorage.setItem(SP_RESOLVE_CACHE_KEY, JSON.stringify({driveId:SP_DRIVE_ID, itemId:SP_ITEM_ID, folderId:SP_FOLDER_ID_RAIZ}));
+  } catch(e){ /* si falla el guardado, no pasa nada -- simplemente no se acelera el próximo F5 */ }
 }
 
 /* ---------- Tablas de Excel: columnas exactas (deben coincidir con
