@@ -60,6 +60,10 @@
   .account-name{font-size:12px;font-weight:700;color:var(--text);}
   .account-status{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);}
   .status-dot{width:6px;height:6px;border-radius:50%;background:var(--red);flex:0 0 auto;}
+  /* Texto SIEMPRE en negro y con fondo propio (no solo color de texto) --
+     así se ve como una etiqueta clara en la esquina, nunca se confunde con
+     el fondo ni se puede perder aunque algún estilo heredado cambie. */
+  .ultima-actualizacion-informe{color:#000 !important;font-weight:700;background:#EEF1F4;border:1px solid #D3DAE1;padding:4px 10px;border-radius:6px;font-size:12px;white-space:nowrap;}
   .search-trigger{display:flex;align-items:center;gap:8px;background:#f4f6f8;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--muted);cursor:pointer;min-width:280px;}
   .search-trigger:hover{background:#eef1f4;border-color:#c7cfd6;}
   .kbd{margin-left:auto;background:#fff;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:10.5px;color:var(--muted);font-weight:700;}
@@ -534,7 +538,7 @@ License: MIT
         <div><h1 id="page-title">Panel general</h1><div class="crumbs" id="crumbs">Gestión de faltantes</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
-        <div class="ultima-actualizacion-informe" style="font-size:11.5px;color:var(--muted);white-space:nowrap;"></div>
+        <div class="ultima-actualizacion-informe"></div>
         <button id="global-search-btn" class="search-trigger" aria-label="Buscar código, paciente o responsable">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
           Buscar código, paciente, responsable...
@@ -710,7 +714,7 @@ License: MIT
             <button class="subtab active" data-tab="resumen">Resumen</button>
             <button class="subtab" data-tab="indicadores">Indicadores</button>
           </div>
-          <div class="ultima-actualizacion-informe" style="font-size:12px;color:var(--muted,#888);white-space:nowrap;"></div>
+          <div class="ultima-actualizacion-informe"></div>
         </div>
 
         <div id="resumen-tab-resumen" class="resumen-tab-content">
@@ -877,7 +881,7 @@ License: MIT
         <div class="panel">
           <div class="panel-head">
             <div><h2>CNG</h2><div class="legend-modulo">Faltantes con novedad</div><div class="desc">Expande cada molécula para ver el detalle por paciente en todas las bodegas</div></div>
-            <div class="ultima-actualizacion-informe" style="font-size:12px;color:var(--muted,#888);white-space:nowrap;"></div>
+            <div class="ultima-actualizacion-informe"></div>
           </div>
           <div id="cng-table"></div>
         </div>
@@ -906,7 +910,7 @@ License: MIT
           <div class="panel-head">
             <div><h2>Abastecimiento</h2><div class="legend-modulo">Faltantes sin novedad</div><div class="desc">Todos los campos visibles en la misma tabla, sin expandir</div></div>
             <div class="bulkbar">
-              <span class="ultima-actualizacion-informe" style="font-size:12px;color:var(--muted,#888);white-space:nowrap;"></span>
+              <span class="ultima-actualizacion-informe"></span>
               <span id="ab-usuario-actual"></span>
               <button class="btn-ghost" id="ab-limpiar">Limpiar filtros</button>
               <button class="btn-ghost" id="ab-exportar">+ Exportar</button>
@@ -942,7 +946,7 @@ License: MIT
           <div class="kpi vencidas"><div class="lbl">Sin gestionar</div><div class="val" id="al-sinbit">0</div><div class="trend">sin ninguna nota todavía</div></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="legend-modulo">Gestión de alternativas</div><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div><div class="ultima-actualizacion-informe" style="font-size:12px;color:var(--muted,#888);white-space:nowrap;"></div></div>
+          <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="legend-modulo">Gestión de alternativas</div><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div><div class="ultima-actualizacion-informe"></div></div>
           <div id="al-table"></div>
         </div>
       </div>
@@ -4324,21 +4328,38 @@ function f10Local(f){ return f ? fechaLocalStr(f) : ''; }
 
 /* ---------- Última actualización del informe (visible para todas las
    personas que usan la app, no solo en el navegador de quien cargó) ----------
-   Se guarda en la propiedad "description" del propio archivo de Excel en
-   SharePoint -- así cualquiera que abra la app ve la MISMA fecha/hora sin
-   depender de localStorage (que es por navegador). A propósito NO se usa
-   lastModifiedDateTime del archivo: ese campo cambia con CUALQUIER escritura
-   (una nota de bitácora, una transferencia, un cambio de responsable...), no
-   solo con la carga de un informe nuevo -- mostraría una fecha equivocada
-   casi todo el tiempo. Escribiendo nuestra propia marca solo en el momento
-   exacto de guardar una carga real, queda un dato confiable. */
+   ANTES esto se guardaba en la propiedad "description" del archivo de
+   Excel -- se quitó porque en varias bibliotecas de documentos de
+   SharePoint ese campo simplemente NO se puede escribir vía Graph (la
+   librería no tiene esa columna habilitada) y la escritura fallaba en
+   silencio: el "catch" de abajo existe justamente para que un fallo aquí
+   nunca tumbe el guardado real de los casos, así que el síntoma era que la
+   fecha nunca aparecía, sin ningún error visible para nadie.
+   Ahora se guarda como una celda en la MISMA hoja de Excel donde vive
+   TablaCasos, bien lejos de la tabla (columna ZZ) para no chocar nunca con
+   sus datos -- usando exactamente la misma API de Workbook (Range) que ya
+   usa el resto de la app para leer/escribir todas las tablas, así que si
+   eso funciona (y ya sabemos que funciona, es lo que sostiene toda la app),
+   esto también funciona. A propósito NO se usa lastModifiedDateTime del
+   archivo: ese campo cambia con CUALQUIER escritura (una nota de bitácora,
+   una transferencia, un cambio de responsable...), no solo con la carga de
+   un informe nuevo -- mostraría una fecha equivocada casi todo el tiempo. */
+const CELDA_ULTIMA_ACTUALIZACION = 'ZZ1';
+let _hojaTablaCasosId = null;
+async function _hojaDeTablaCasos(){
+  if(_hojaTablaCasosId) return _hojaTablaCasosId;
+  const ws = await graphFetchWB(SP_DRIVE_ID, SP_ITEM_ID, `/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}/workbook/tables/TablaCasos/worksheet`);
+  _hojaTablaCasosId = ws.id;
+  return _hojaTablaCasosId;
+}
 let _ultimaActualizacionCache = undefined;
 async function guardarUltimaActualizacionInforme(nombreUsuario){
   const marca = {fecha: ldbAhora(), usuario: nombreUsuario || ''};
   try{
-    await graphFetch(`/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}`, {
-      method:'PATCH', body: JSON.stringify({description: JSON.stringify(marca)}),
-    });
+    const hojaId = await _hojaDeTablaCasos();
+    await graphFetchWB(SP_DRIVE_ID, SP_ITEM_ID,
+      `/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}/workbook/worksheets/${hojaId}/range(address='${CELDA_ULTIMA_ACTUALIZACION}')`,
+      { method:'PATCH', body: JSON.stringify({values:[[JSON.stringify(marca)]]}) });
     _ultimaActualizacionCache = marca;
   }catch(e){
     // No se deja que un fallo aquí tumbe la carga real de datos -- si esto
@@ -4350,9 +4371,13 @@ async function guardarUltimaActualizacionInforme(nombreUsuario){
 async function obtenerUltimaActualizacionInforme(forzar){
   if(!forzar && _ultimaActualizacionCache !== undefined) return _ultimaActualizacionCache;
   try{
-    const item = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}?$select=description`);
-    _ultimaActualizacionCache = (item && item.description) ? JSON.parse(item.description) : null;
+    const hojaId = await _hojaDeTablaCasos();
+    const r = await graphFetchWB(SP_DRIVE_ID, SP_ITEM_ID,
+      `/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}/workbook/worksheets/${hojaId}/range(address='${CELDA_ULTIMA_ACTUALIZACION}')`);
+    const crudo = r && r.values && r.values[0] && r.values[0][0];
+    _ultimaActualizacionCache = crudo ? JSON.parse(crudo) : null;
   }catch(e){
+    console.error('No se pudo leer la marca de última actualización del informe:', e);
     _ultimaActualizacionCache = null;
   }
   return _ultimaActualizacionCache;
@@ -4366,10 +4391,19 @@ async function renderUltimaActualizacionInforme(forzar){
   const els = document.querySelectorAll('.ultima-actualizacion-informe');
   if(!els.length) return;
   const info = await obtenerUltimaActualizacionInforme(forzar);
+  // Nunca se deja el recuadro vacío -- ni bien alguien entra a la app, antes
+  // de que exista una marca guardada, se ve igual el mensaje de abajo, para
+  // que quede claro que el indicador SÍ está ahí (no es un bug ni algo que
+  // se perdió) y que solo falta la primera carga real después de este cambio.
   const texto = (info && info.fecha)
     ? `Informe actualizado: ${fechaHoraCorta(info.fecha)}${info.usuario ? ' · '+esc(info.usuario) : ''}`
-    : '';
-  els.forEach(el=> el.textContent = texto);
+    : 'Informe: aún sin carga registrada';
+  els.forEach(el=>{
+    el.textContent = texto;
+    // Color forzado también desde JS (no solo por CSS) -- doble garantía de
+    // que este texto nunca puede terminar en blanco sobre blanco.
+    el.style.setProperty('color', '#000', 'important');
+  });
 }
 function ldbMesesEntre(mesInicio, mesFin){
   const meses = [];
