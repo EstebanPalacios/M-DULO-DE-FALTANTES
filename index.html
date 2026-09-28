@@ -5895,7 +5895,10 @@ async function ejecutarIngestaLocal(files, guardar){
   // carga se procesaba, el PATCH sigue cayendo en la fila correcta en vez
   // de sobrescribir silenciosamente la fila de otro usuario. ----
   const erroresParciales = [];
-  if(casosNuevosBatch.length) await agregarFilas('TablaCasos', casosNuevosBatch);
+  if(casosNuevosBatch.length){
+    try{ await agregarFilas('TablaCasos', casosNuevosBatch); }
+    catch(e){ e.message = 'Al guardar los casos nuevos: ' + e.message; throw e; }
+  }
 
   if(pacientesDesactivarBatch.length){
     const pacientesFrescos = await leerTabla('TablaPacientes', true);
@@ -5914,7 +5917,10 @@ async function ejecutarIngestaLocal(files, guardar){
     resultados.forEach((r,i)=>{ if(!r.ok) erroresParciales.push(`Paciente ${items[i].filaConIndice.paciente_row_id} no se pudo actualizar (${r.error}) -- se omitio.`); });
   }
 
-  if(pacientesNuevosBatch.length) await agregarFilas('TablaPacientes', pacientesNuevosBatch);
+  if(pacientesNuevosBatch.length){
+    try{ await agregarFilas('TablaPacientes', pacientesNuevosBatch); }
+    catch(e){ e.message = 'Al guardar los pacientes nuevos (' + pacientesNuevosBatch.length + ' fila(s)): ' + e.message; throw e; }
+  }
 
   if(casosActualizarBatch.length){
     const casosFrescos = await leerTabla('TablaCasos', true);
@@ -6287,7 +6293,14 @@ document.getElementById('carga-procesar').addEventListener('click', async ()=>{
     const contextoParcial = !ensayo
       ? '<br><br>Si esto ocurrió a mitad de un guardado real, es posible que parte de los datos ya se haya guardado antes del corte. Antes de volver a procesar el mismo archivo, revisa el módulo correspondiente para confirmar el estado actual.'
       : '';
-    resultadoDiv.innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}${contextoParcial}</div>`;
+    // err.raw trae el mensaje TÉCNICO original de Microsoft (el que
+    // graphFetch normalmente solo deja en la consola) -- se muestra aquí
+    // también, en este flujo puntual, para poder diagnosticar sin tener que
+    // abrir las herramientas de desarrollador del navegador.
+    const detalleTecnico = err.raw
+      ? `<br><br><span style="color:var(--muted);font-size:11.5px;">Detalle técnico (para soporte): ${esc(err.raw)}${err.status?' [HTTP '+err.status+']':''}</span>`
+      : '';
+    resultadoDiv.innerHTML = `<div class="empty" style="color:var(--red);">${esc(err.message)}${contextoParcial}${detalleTecnico}</div>`;
     toast('No se pudo procesar la carga — revisa el detalle en pantalla.');
   } finally {
     btn.disabled = cargaArchivos.length === 0;
