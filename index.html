@@ -4099,18 +4099,15 @@ const COLUMNAS_TABLA = {
      "codigo_alternativa","activo","fecha_creacion","fecha_ultima_actividad","fecha_cierre",
      "tiene_bitacora","ultima_bitacora_fecha","ultima_bitacora_nota_predefinida_id",
      "ultima_bitacora_nota_libre","ultima_bitacora_usuario_id"],
-  // OJO: fecha_creacion/fecha_actualizacion se agregaron en el Excel real pero
-  // se REVIRTIÓ su uso aquí (ver mensaje del 28-sep) -- un desajuste de
-  // conteo de columnas entre esto y la tabla real de Excel (por ejemplo, si
-  // las columnas nuevas se escribieron en las celdas pero la tabla de Excel
-  // no las "absorbió" como parte del objeto Tabla) hace que CUALQUIER
-  // inserción a esta tabla falle con "Los datos enviados no son válidos".
-  // No se vuelven a activar hasta confirmar el conteo real de columnas de
-  // la tabla en Excel.
+  // Confirmado contra el archivo real (28-sep): TablaPacientes SÍ tiene
+  // exactamente estas 23 columnas, en este orden -- la tabla de Excel real
+  // absorbió bien fecha_creacion/fecha_actualizacion. La reversión anterior
+  // fue un error mío (asumí mal la causa del fallo); esta es la versión
+  // correcta.
   TablaPacientes: ["paciente_row_id","caso_id","numero_pedido","fecha_pedido","fecha_a_facturar",
      "fecha_entrega_promesa","unds_pedidas","unds_despachadas","pend_x_despachar","stock_erp",
      "stock_seg","disponible","pventa","pesos","laboratorio","agente","nit_paciente",
-     "nombre_paciente","cuenta","observaciones","activo"],
+     "nombre_paciente","cuenta","observaciones","activo","fecha_creacion","fecha_actualizacion"],
   TablaTransferencias: ["transferencia_id","caso_id","modulo_origen","modulo_destino","nota","usuario_id","fecha"],
   TablaUsuarios: ["usuario_id","nombre","email","rol","modulo_asignado","activo","fecha_creacion"],
   TablaNotas: ["nota_predef_id","modulo","texto","orden","activo"],
