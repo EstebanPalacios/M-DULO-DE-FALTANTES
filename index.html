@@ -63,7 +63,7 @@
   /* Texto SIEMPRE en negro y con fondo propio (no solo color de texto) --
      así se ve como una etiqueta clara en la esquina, nunca se confunde con
      el fondo ni se puede perder aunque algún estilo heredado cambie. */
-  .ultima-actualizacion-informe{color:#000 !important;font-weight:700;background:#EEF1F4;border:1px solid #D3DAE1;padding:4px 10px;border-radius:6px;font-size:12px;white-space:nowrap;}
+  .ultima-actualizacion-informe{color:#000 !important;font-weight:700;background:#EEF1F4;border:1px solid #D3DAE1;padding:3px 8px;border-radius:6px;font-size:10px;white-space:nowrap;}
   .search-trigger{display:flex;align-items:center;gap:8px;background:#f4f6f8;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--muted);cursor:pointer;min-width:280px;}
   .search-trigger:hover{background:#eef1f4;border-color:#c7cfd6;}
   .kbd{margin-left:auto;background:#fff;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:10.5px;color:var(--muted);font-weight:700;}
@@ -271,6 +271,13 @@
   .cats-intro{margin:26px 0 12px;}
   .cats-intro h2{margin:0 0 4px;font-size:15px;color:var(--navy);font-weight:800;}
   .cats-intro .desc{font-size:12px;color:var(--muted);}
+  /* ---------- Saludo del panel general -- le da al panel un punto de
+     entrada más personal y con jerarquía visual, en vez de arrancar
+     directo en filtros/números. ---------- */
+  .home-welcome{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:16px 20px;border-radius:var(--radius);background:linear-gradient(120deg,var(--navy) 0%,var(--navy-2) 60%,var(--navy-3) 100%);box-shadow:var(--shadow-md);animation:viewFadeIn .4s cubic-bezier(.16,1,.3,1);}
+  .hw-avatar{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex:0 0 auto;}
+  .hw-greet{color:#fff;font-size:17px;font-weight:800;letter-spacing:-.2px;}
+  .hw-date{color:rgba(255,255,255,.62);font-size:12px;font-weight:600;margin-top:2px;text-transform:capitalize;}
   .cats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;}
   .cat{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px 22px 20px;text-align:center;cursor:pointer;transition:transform .2s cubic-bezier(.16,1,.3,1),box-shadow .2s,border-color .2s;box-shadow:var(--shadow-sm);}
   .cat::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--cat-c1,var(--orange)),var(--cat-c2,var(--orange-dark)));}
@@ -357,7 +364,20 @@
   .ms-clear{border:none;background:none;color:var(--info);cursor:pointer;font-size:11.5px;font-weight:700;}
 
   /* overlays */
-  .overlay{display:flex;position:fixed;inset:0;background:rgba(14,40,65,.55);align-items:center;justify-content:center;z-index:120;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .16s ease,visibility .16s ease;}
+  .overlay{display:flex;position:fixed;inset:0;background:rgba(14,40,65,.55);backdrop-filter:blur(2px);align-items:center;justify-content:center;z-index:120;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s cubic-bezier(.16,1,.3,1),visibility .2s cubic-bezier(.16,1,.3,1);}
+  /* ---------- Pantalla de arranque -- cubre el login y la app mientras se
+     resuelve si ya hay una sesión activa, para que nunca se vea el
+     formulario de login "parpadear" antes de entrar directo, ni la app
+     entrar con los contadores en 0 antes de que carguen los datos reales.
+     Se ve desde el primer instante (antes de que corra cualquier JS) porque
+     es parte del HTML inicial, y se desvanece con una transición suave una
+     vez que ya se sabe qué mostrar. ---------- */
+  #boot-overlay{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--navy);opacity:1;visibility:visible;transition:opacity .5s cubic-bezier(.16,1,.3,1),visibility .5s cubic-bezier(.16,1,.3,1);}
+  #boot-overlay.oculto{opacity:0;visibility:hidden;pointer-events:none;}
+  #boot-overlay .boot-mark{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px;letter-spacing:.5px;}
+  #boot-overlay .boot-spin{width:24px;height:24px;border-radius:50%;border:2.5px solid rgba(255,255,255,.18);border-top-color:#5eead4;animation:bootSpin .8s linear infinite;}
+  @keyframes bootSpin{to{transform:rotate(360deg);}}
+  #boot-overlay .boot-txt{color:rgba(255,255,255,.55);font-size:11.5px;font-weight:700;letter-spacing:.3px;}
   #login-overlay{z-index:110;}
   .login-overlay{padding:0;align-items:stretch;justify-content:stretch;background:var(--navy);}
   .login-split{display:flex;width:100%;height:100%;}
@@ -520,6 +540,11 @@ License: MIT
 </script>
 </head>
 <body>
+<div id="boot-overlay" aria-hidden="true">
+  <div class="boot-mark">GF</div>
+  <div class="boot-spin"></div>
+  <div class="boot-txt">Cargando…</div>
+</div>
 <div id="app">
   <nav id="sidebar" aria-label="Navegación principal">
     <div class="brand"><div class="t1">Gestión de Faltantes</div><div class="t2">UEN Dispensación · Grupo Afín</div><div class="proto-badge">Gestión Ágil de Pendientes</div></div>
@@ -572,6 +597,13 @@ License: MIT
 
       <!-- ============ HOME ============ -->
       <div class="view active" id="view-home">
+        <div class="home-welcome" id="home-welcome">
+          <div class="hw-avatar" id="hw-avatar">?</div>
+          <div>
+            <div class="hw-greet" id="hw-greet">Hola</div>
+            <div class="hw-date" id="hw-date"></div>
+          </div>
+        </div>
         <div class="filters">
           <div class="field"><label>Desde</label><input type="date" id="h-desde" value="2026-06-01"></div>
           <div class="field"><label>Hasta</label><input type="date" id="h-hasta" value="2026-07-31"></div>
@@ -722,7 +754,6 @@ License: MIT
             <button class="subtab active" data-tab="resumen">Resumen</button>
             <button class="subtab" data-tab="indicadores">Indicadores</button>
           </div>
-          <div class="ultima-actualizacion-informe"></div>
         </div>
 
         <div id="resumen-tab-resumen" class="resumen-tab-content">
@@ -889,7 +920,6 @@ License: MIT
         <div class="panel">
           <div class="panel-head">
             <div><h2>CNG</h2><div class="legend-modulo">Faltantes con novedad</div><div class="desc">Expande cada molécula para ver el detalle por paciente en todas las bodegas</div></div>
-            <div class="ultima-actualizacion-informe"></div>
           </div>
           <div id="cng-table"></div>
         </div>
@@ -918,7 +948,6 @@ License: MIT
           <div class="panel-head">
             <div><h2>Abastecimiento</h2><div class="legend-modulo">Faltantes sin novedad</div><div class="desc">Todos los campos visibles en la misma tabla, sin expandir</div></div>
             <div class="bulkbar">
-              <span class="ultima-actualizacion-informe"></span>
               <span id="ab-usuario-actual"></span>
               <button class="btn-ghost" id="ab-limpiar">Limpiar filtros</button>
               <button class="btn-ghost" id="ab-exportar">+ Exportar</button>
@@ -954,7 +983,7 @@ License: MIT
           <div class="kpi vencidas"><div class="lbl">Sin gestionar</div><div class="val" id="al-sinbit">0</div><div class="trend">sin ninguna nota todavía</div></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="legend-modulo">Gestión de alternativas</div><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div><div class="ultima-actualizacion-informe"></div></div>
+          <div class="panel-head"><div><h2>Desarrollo de aliados</h2><div class="legend-modulo">Gestión de alternativas</div><div class="desc">Expande cada molécula para ver el detalle por bodega y las alternativas de precio</div></div></div>
           <div id="al-table"></div>
         </div>
       </div>
@@ -1601,7 +1630,7 @@ const MODULE_LABELS = {CNG:'CNG', Abastecimiento:'Abastecimiento', Aliados:'Desa
 // Nombre corto de cada bodega, para que la gente se guíe por algo además
 // del número -- Esteban dio esta lista; una bodega que no esté aquí
 // simplemente se muestra solo con su número, sin romper nada.
-const BODEGA_NOMBRES = {'1':'CL Medellín', '19':'CL UdeA', '21':'CL EPM', '5':'CL Bogotá', '6':'CL Cali', '7':'CL Barranquilla'};
+const BODEGA_NOMBRES = {'1':'CL Medellín', '19':'CL UdeA', '21':'CL EPM', '5':'CL Bogotá', '6':'CL Cali', '7':'CL Barranquilla', '16':'CL Santa Gertrudis'};
 function bodegaLabel(id){
   const nombre = BODEGA_NOMBRES[String(id)];
   return nombre ? `${esc(id)} - ${esc(nombre)}` : esc(id);
@@ -2138,7 +2167,25 @@ async function obtenerResumenConCache(forzar){
   }
   return resumenCache;
 }
+// Saludo de bienvenida del panel general -- muestra nombre y fecha actual;
+// no depende de que haya datos de casos, así que se pinta aparte y nunca se
+// bloquea si obtenerResumenConCache tarda o falla.
+function renderSaludoHome(){
+  const greetEl = document.getElementById('hw-greet');
+  if(!greetEl) return;
+  const sesion = getSesion();
+  const hora = new Date().getHours();
+  const saludo = hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches';
+  greetEl.textContent = sesion && sesion.nombre ? `${saludo}, ${sesion.nombre.split(' ')[0]}` : saludo;
+  const fechaEl = document.getElementById('hw-date');
+  if(fechaEl){
+    fechaEl.textContent = new Date().toLocaleDateString('es-CO', { weekday:'long', day:'numeric', month:'long' });
+  }
+  const avatarEl = document.getElementById('hw-avatar');
+  if(avatarEl) avatarEl.textContent = (sesion && initials(sesion.nombre)) || '?';
+}
 async function recomputeHome(forzar){
+  renderSaludoHome();
   const r = await obtenerResumenConCache(forzar);
   if(!r) return;
   const hoyStr = ldbHoy();
@@ -3432,7 +3479,7 @@ function renderAbast(){
       <button class="btn-orange ab-transfer" data-id="${esc(r.caso_id)}">${icon('transfer',13)} Transferir</button>
     `,
     onSelectChange: (selected)=>{
-      abSelected = new Set([...selected].map(Number));
+      abSelected = new Set(selected);
       document.getElementById('ab-sel-count').textContent = abSelected.size + ' seleccionados';
     },
     wireActions: (tbody)=>{
@@ -6039,6 +6086,15 @@ function mostrarLogin(mensajeError){
 function ocultarLogin(){
   document.getElementById('login-overlay').classList.remove('active');
 }
+// Pantalla de arranque -- se queda encima de todo (login o app) hasta que
+// ya se sabe con certeza qué mostrar y, si se va a entrar directo a la app,
+// hasta que los datos del panel general ya están listos. Así se evita tanto
+// el parpadeo del formulario de login en quien ya tenía sesión, como ver
+// los contadores en 0 un instante antes de que carguen los reales.
+function ocultarBoot(){
+  const el = document.getElementById('boot-overlay');
+  if(el) el.classList.add('oculto');
+}
 
 function openInfoConexion(){
   const cuentaEl = document.getElementById('info-cuenta-actual');
@@ -6088,12 +6144,10 @@ async function completarLoginTrasRedirect(){
     await resolverArchivoExcel();
     const sesion = await ldbVerificarLoginMicrosoft();
     setSesion(sesion);
-    ocultarLogin();
     aplicarRestriccionesDeRol(sesion);
-    recomputeHome();
-    cargarNotificaciones();
+    await Promise.all([recomputeHome(), cargarNotificaciones(), renderUltimaActualizacionInforme()]);
     aplicarRestriccionAdminCargarDatos();
-    renderUltimaActualizacionInforme();
+    ocultarLogin();
     toast(`Bienvenido, ${sesion.nombre}.`, true);
   } catch(err){
     mostrarLogin(err.message || 'No se pudo completar el inicio de sesión con Microsoft.');
@@ -6104,32 +6158,38 @@ async function completarLoginTrasRedirect(){
 // aplica directo. Si solo hay cuenta de Microsoft (acabamos de volver
 // de loginRedirect) pero aún no hay sesión de app, se completa sola.
 async function iniciarAppLocal(){
-  await inicializarDB();
-  actualizarEstadoConexion();
-  if(!DB_DISPONIBLE){
-    mostrarLogin('La aplicación todavía no está lista para usarse. Comunícate con el administrador.');
-    return;
-  }
-  const sesion = getSesion();
-  if(sesion && msalCuenta){
-    try{ await resolverArchivoExcel(); } catch(e){ mostrarLogin(e.message); return; }
-    ocultarLogin();
-    aplicarRestriccionesDeRol(sesion);
-    recomputeHome();
-    cargarNotificaciones();
-    aplicarRestriccionAdminCargarDatos();
-    renderUltimaActualizacionInforme();
-    // La sesión guardada en localStorage puede estar desactualizada -- si un
-    // administrador desactivó a este usuario o le cambió el rol en la hoja
-    // "Usuarios" del Excel después de que este navegador inició sesión, no
-    // queremos que siga viendo los permisos viejos hasta que se le ocurra
-    // cerrar sesión manualmente. Revalidamos contra el Excel en segundo
-    // plano (sin bloquear el primer render) y reaccionamos si algo cambió.
-    revalidarSesionEnSegundoPlano(sesion);
-  } else if(msalCuenta){
-    await completarLoginTrasRedirect();
-  } else {
-    mostrarLogin();
+  try{
+    await inicializarDB();
+    actualizarEstadoConexion();
+    if(!DB_DISPONIBLE){
+      mostrarLogin('La aplicación todavía no está lista para usarse. Comunícate con el administrador.');
+      return;
+    }
+    const sesion = getSesion();
+    if(sesion && msalCuenta){
+      try{ await resolverArchivoExcel(); } catch(e){ mostrarLogin(e.message); return; }
+      aplicarRestriccionesDeRol(sesion);
+      // Se esperan estas cargas (en paralelo) ANTES de quitar la pantalla de
+      // arranque -- así, quien recarga la página o vuelve a entrar nunca ve
+      // los contadores del panel general en 0 momentáneamente: la app solo
+      // se revela con los datos reales ya puestos.
+      await Promise.all([recomputeHome(), cargarNotificaciones(), renderUltimaActualizacionInforme()]);
+      aplicarRestriccionAdminCargarDatos();
+      ocultarLogin();
+      // La sesión guardada en localStorage puede estar desactualizada -- si un
+      // administrador desactivó a este usuario o le cambió el rol en la hoja
+      // "Usuarios" del Excel después de que este navegador inició sesión, no
+      // queremos que siga viendo los permisos viejos hasta que se le ocurra
+      // cerrar sesión manualmente. Revalidamos contra el Excel en segundo
+      // plano (sin bloquear el primer render) y reaccionamos si algo cambió.
+      revalidarSesionEnSegundoPlano(sesion);
+    } else if(msalCuenta){
+      await completarLoginTrasRedirect();
+    } else {
+      mostrarLogin();
+    }
+  } finally {
+    ocultarBoot();
   }
 }
 async function revalidarSesionEnSegundoPlano(sesionCacheada){
