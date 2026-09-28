@@ -652,6 +652,14 @@ License: MIT
 
           <div id="carga-resultado"></div>
         </div>
+
+        <div class="panel" id="deshacer-carga-panel" style="margin-top:16px;">
+          <div class="panel-head">
+            <div><h2>Deshacer última carga</h2><div class="desc">Si la carga más reciente se subió con datos equivocados, esto la revierte POR COMPLETO -- casos y pacientes vuelven exactamente a como estaban justo antes de esa carga, para poder corregir el archivo y volver a subirlo bien. Solo se puede deshacer la carga MÁS RECIENTE.</div></div>
+          </div>
+          <div id="deshacer-carga-info" class="empty">Revisando si hay alguna carga reciente para deshacer...</div>
+          <button class="btn-ghost" id="deshacer-carga-btn" style="display:none;color:var(--red);border-color:var(--red);margin-top:10px;">Deshacer última carga</button>
+        </div>
         </div>
 
         <div id="cargar-tab-notas" class="cargar-tab-content" style="display:none;">
@@ -984,6 +992,19 @@ License: MIT
     <div class="modal-actions">
       <button class="btn-ghost" id="transfer-cancel">Cancelar</button>
       <button class="btn-primary" id="transfer-save">Confirmar transferencia</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Confirmar "Deshacer última carga" ===== -->
+<div class="overlay" id="deshacer-carga-overlay">
+  <div class="modal">
+    <h3>¿Deshacer la última carga?</h3>
+    <div class="sub" id="deshacer-carga-sub"></div>
+    <p style="font-size:12.5px;color:var(--red);font-weight:600;">Esto revierte casos y pacientes exactamente a como estaban antes de esa carga. No se puede deshacer dos veces la misma carga.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="deshacer-carga-cancel">Cancelar</button>
+      <button class="btn-primary" id="deshacer-carga-confirm" style="background:var(--red);border-color:var(--red);">Sí, deshacer por completo</button>
     </div>
   </div>
 </div>
@@ -1541,6 +1562,7 @@ function showView(name){
   if(name==='cng' && !cacheVigente('cng')){ refreshCng(); marcarCacheFresca('cng'); }
   if(name==='abast' && !cacheVigente('abast')){ refreshAbast(); marcarCacheFresca('abast'); }
   if(name==='aliados' && !cacheVigente('aliados')){ refreshAliados(); marcarCacheFresca('aliados'); }
+  if(name==='cargar') refreshDeshacerCargaPanel();
 }
 document.querySelectorAll('.nav-item').forEach(el=>{
   el.addEventListener('click', ()=>showView(el.dataset.goto));
@@ -2489,6 +2511,11 @@ function aplicarRestriccionAdminCargarDatos(){
   const esAdmin = sesion && sesion.rol==='admin';
   document.getElementById('cargar-tab-notas-btn').style.display = esAdmin ? 'inline-block' : 'none';
   document.getElementById('cargar-tab-usuarios-btn').style.display = esAdmin ? 'inline-block' : 'none';
+  // Deshacer una carga completa es una acción delicada (afecta a TODOS los
+  // módulos y usuarios) -- solo el administrador la ve, igual que las
+  // pestañas de Notas y Usuarios de arriba.
+  const panelDeshacer = document.getElementById('deshacer-carga-panel');
+  if(panelDeshacer) panelDeshacer.style.display = esAdmin ? '' : 'none';
 }
 
 /* ---------- Notas predefinidas (admin) ---------- */
@@ -4072,6 +4099,14 @@ const COLUMNAS_TABLA = {
      "codigo_alternativa","activo","fecha_creacion","fecha_ultima_actividad","fecha_cierre",
      "tiene_bitacora","ultima_bitacora_fecha","ultima_bitacora_nota_predefinida_id",
      "ultima_bitacora_nota_libre","ultima_bitacora_usuario_id"],
+  // OJO: fecha_creacion/fecha_actualizacion se agregaron en el Excel real pero
+  // se REVIRTIÓ su uso aquí (ver mensaje del 28-sep) -- un desajuste de
+  // conteo de columnas entre esto y la tabla real de Excel (por ejemplo, si
+  // las columnas nuevas se escribieron en las celdas pero la tabla de Excel
+  // no las "absorbió" como parte del objeto Tabla) hace que CUALQUIER
+  // inserción a esta tabla falle con "Los datos enviados no son válidos".
+  // No se vuelven a activar hasta confirmar el conteo real de columnas de
+  // la tabla en Excel.
   TablaPacientes: ["paciente_row_id","caso_id","numero_pedido","fecha_pedido","fecha_a_facturar",
      "fecha_entrega_promesa","unds_pedidas","unds_despachadas","pend_x_despachar","stock_erp",
      "stock_seg","disponible","pventa","pesos","laboratorio","agente","nit_paciente",
@@ -4282,6 +4317,47 @@ async function patchFilasEnLoteEn(driveId, itemId, tabla, cols, items){
   invalidarCacheTablas(itemId, tabla);
   return resultados;
 }
+/* ---------- Borrar varias filas por índice ----------
+   Se usa para "Deshacer última carga" (borrar las filas que esa carga había
+   insertado). Borrar corre los índices de todas las filas que quedan
+   DEBAJO de la fila borrada -- por eso hay que borrar SIEMPRE de mayor
+   índice a menor, y NUNCA en paralelo/desordenado. Se manda en lotes de
+   hasta 20 por /$batch (para no volver a la lentitud de una llamada por
+   fila), pero encadenando cada solicitud a la anterior con "dependsOn" --
+   eso obliga a Microsoft a procesarlas en el orden exacto en que se
+   mandaron dentro de cada lote, no en el orden que le convenga. */
+async function eliminarFilasPorIndiceEn(driveId, itemId, tabla, indices){
+  if(!indices || !indices.length) return;
+  const ordenados = [...new Set(indices)].sort((a,b)=>b-a); // descendente, sin duplicados
+  let sesionId = await _sesionExcel(driveId, itemId);
+  for(let i=0; i<ordenados.length; i+=GRAPH_BATCH_TAM){
+    const trozo = ordenados.slice(i, i+GRAPH_BATCH_TAM);
+    const armar = (sid)=>({
+      requests: trozo.map((idx, pos)=>({
+        id: String(pos),
+        method: 'DELETE',
+        url: `/drives/${driveId}/items/${itemId}/workbook/tables/${tabla}/rows/itemAt(index=${idx})`,
+        headers: {...(sid?{'workbook-session-id':sid}:{})},
+        ...(pos>0 ? {dependsOn:[String(pos-1)]} : {}),
+      })),
+    });
+    let r = await graphFetch('/$batch', {method:'POST', body: JSON.stringify(armar(sesionId))});
+    let respuestas = r.responses || [];
+    const huboErrorSesion = respuestas.some(resp=> resp.status>=400 &&
+      /InvalidSession|SessionNotFound/i.test(JSON.stringify(resp.body && resp.body.error || '')));
+    if(huboErrorSesion){
+      delete SP_SESIONES[itemId];
+      sesionId = await _sesionExcel(driveId, itemId);
+      r = await graphFetch('/$batch', {method:'POST', body: JSON.stringify(armar(sesionId))});
+      respuestas = r.responses || [];
+    }
+    const fallo = respuestas.find(resp=> !(resp.status>=200 && resp.status<300));
+    if(fallo) throw new Error('No se pudieron borrar algunas filas al deshacer la carga (' +
+      ((fallo.body && fallo.body.error && fallo.body.error.message) || 'error de Microsoft') + ').');
+  }
+  invalidarCacheTablas(itemId, tabla);
+}
+async function eliminarFilasPorIndice(tabla, indices){ return eliminarFilasPorIndiceEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, indices); }
 // Atajos para el archivo PRINCIPAL (Casos/Pacientes/Transferencias/Usuarios/Notas)
 async function leerTabla(tabla, forzar){ return leerTablaEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], forzar); }
 async function agregarFila(tabla, obj){ return agregarFilaEn(SP_DRIVE_ID, SP_ITEM_ID, tabla, COLUMNAS_TABLA[tabla], obj); }
@@ -4430,6 +4506,116 @@ async function _folderHistorial(){
   });
   _folderIdHistorial = creada.id;
   return _folderIdHistorial;
+}
+/* ---------- Respaldo para "Deshacer última carga" ----------
+   Se guarda como un archivo JSON dentro de la carpeta "Historial" (la misma
+   que ya usan los libros mensuales de bitácora), con TODO lo necesario para
+   revertir la carga más reciente sin tener que adivinar nada:
+     - casos_nuevos_ids / pacientes_nuevos_ids: filas que esa carga insertó
+       y que por lo tanto hay que BORRAR al deshacer (no existían antes).
+     - casos_actualizados: por cada caso que la carga modificó, su fila
+       COMPLETA tal como estaba antes -- se restaura con un PATCH directo.
+     - pacientes_reactivar_ids: pacientes que la carga desactivó (porque el
+       caso "continuó" y se reemplazó su detalle) -- se reactivan.
+   Solo se guarda UN respaldo a la vez (el de la carga más reciente): deshacer
+   siempre deshace la última carga, no una carga antigua -- así de simple y
+   predecible. */
+const RESPALDO_CARGA_ARCHIVO = 'UltimoRespaldoCarga.json';
+async function guardarRespaldoUltimaCarga(snapshot){
+  const folderId = await _folderHistorial();
+  await graphFetch(`/drives/${SP_DRIVE_ID}/items/${folderId}:/${RESPALDO_CARGA_ARCHIVO}:/content`, {
+    method:'PUT', body: JSON.stringify(snapshot),
+  });
+}
+async function leerRespaldoUltimaCarga(){
+  const folderId = await _folderHistorial();
+  const hijosVal = await graphFetchPaginado(`/drives/${SP_DRIVE_ID}/items/${folderId}/children`);
+  const item = hijosVal.find(f=>f.name===RESPALDO_CARGA_ARCHIVO);
+  if(!item) return null; // todavía no hay ninguna carga que se pueda deshacer
+  return await graphFetch(`/drives/${SP_DRIVE_ID}/items/${folderId}:/${RESPALDO_CARGA_ARCHIVO}:/content`);
+}
+async function borrarRespaldoUltimaCarga(){
+  const folderId = await _folderHistorial();
+  const hijosVal = await graphFetchPaginado(`/drives/${SP_DRIVE_ID}/items/${folderId}/children`);
+  const item = hijosVal.find(f=>f.name===RESPALDO_CARGA_ARCHIVO);
+  // No se deja deshacer DOS veces la misma carga: una vez aplicada la
+  // reversión, se borra el respaldo -- si se dejara, alguien podría darle
+  // "Deshacer" otra vez y borrar/pisar filas que ya se restauraron bien.
+  if(item) await graphFetch(`/drives/${SP_DRIVE_ID}/items/${item.id}`, {method:'DELETE'});
+}
+/* ---------- Deshacer la última carga ---------- */
+async function ldbInfoRespaldoUltimaCarga(){
+  const snap = await leerRespaldoUltimaCarga();
+  if(!snap) return null;
+  return {fecha: snap.fecha, usuario: snap.usuario, ...snap.resumen};
+}
+async function ldbDeshacerUltimaCarga(){
+  const snap = await leerRespaldoUltimaCarga();
+  if(!snap) throw new Error('No hay ninguna carga reciente para deshacer (o ya fue deshecha).');
+
+  // 1) Borrar los casos que esa carga había insertado como nuevos -- no
+  //    existían antes, así que deshacer significa que dejen de existir.
+  if(snap.casos_nuevos_ids && snap.casos_nuevos_ids.length){
+    const casosFrescos = await leerTabla('TablaCasos', true);
+    const porId = new Map(casosFrescos.map(c=>[String(c.caso_id), c]));
+    const indices = snap.casos_nuevos_ids.map(id=>porId.get(String(id))).filter(Boolean).map(f=>f._indice);
+    await eliminarFilasPorIndice('TablaCasos', indices);
+  }
+
+  // 2) Devolver a como estaban los casos que la carga modificó (los que
+  //    "continuaron" o se cerraron) -- se restaura la fila COMPLETA de antes.
+  if(snap.casos_actualizados && snap.casos_actualizados.length){
+    const casosFrescos = await leerTabla('TablaCasos', true);
+    const porId = new Map(casosFrescos.map(c=>[String(c.caso_id), c]));
+    const items = [];
+    for(const {caso_id, previo} of snap.casos_actualizados){
+      const filaFresca = porId.get(String(caso_id));
+      // Si el caso ya no existe (por ejemplo, alguien lo borró manualmente
+      // del Excel después de esta carga), se omite sin romper el resto de
+      // la reversión -- no hay a qué fila devolverle sus datos.
+      if(!filaFresca) continue;
+      items.push({filaConIndice: filaFresca, cambios: previo});
+    }
+    await patchFilasEnLote('TablaCasos', items);
+  }
+
+  // 3) Borrar los pacientes que esa carga insertó.
+  if(snap.pacientes_nuevos_ids && snap.pacientes_nuevos_ids.length){
+    const pacFrescos = await leerTabla('TablaPacientes', true);
+    const porId = new Map(pacFrescos.map(p=>[String(p.paciente_row_id), p]));
+    const indices = snap.pacientes_nuevos_ids.map(id=>porId.get(String(id))).filter(Boolean).map(f=>f._indice);
+    await eliminarFilasPorIndice('TablaPacientes', indices);
+  }
+
+  // 4) Reactivar los pacientes que esa carga había desactivado al reemplazar
+  //    el detalle de un caso que "continuaba".
+  if(snap.pacientes_reactivar_ids && snap.pacientes_reactivar_ids.length){
+    const pacFrescos = await leerTabla('TablaPacientes', true);
+    const porId = new Map(pacFrescos.map(p=>[String(p.paciente_row_id), p]));
+    const items = [];
+    for(const id of snap.pacientes_reactivar_ids){
+      const filaFresca = porId.get(String(id));
+      if(!filaFresca) continue;
+      items.push({filaConIndice: filaFresca, cambios: {activo:true, fecha_actualizacion: ldbAhora()}});
+    }
+    await patchFilasEnLote('TablaPacientes', items);
+  }
+
+  // La esquina de "última actualización" vuelve a mostrar la carga ANTERIOR
+  // a la que se acaba de deshacer (con su fecha ORIGINAL, no la de ahora) --
+  // o queda vacía si esta era la primera carga que existía.
+  try{
+    const hojaId = await _hojaDeTablaCasos();
+    const valorCelda = snap.marca_anterior ? JSON.stringify(snap.marca_anterior) : '';
+    await graphFetchWB(SP_DRIVE_ID, SP_ITEM_ID,
+      `/drives/${SP_DRIVE_ID}/items/${SP_ITEM_ID}/workbook/worksheets/${hojaId}/range(address='${CELDA_ULTIMA_ACTUALIZACION}')`,
+      { method:'PATCH', body: JSON.stringify({values:[[valorCelda]]}) });
+    _ultimaActualizacionCache = snap.marca_anterior || null;
+  }catch(e){ console.error('No se pudo restaurar la marca de última actualización tras deshacer:', e); }
+
+  await borrarRespaldoUltimaCarga();
+  invalidarCacheDatos();
+  return {ok:true, ...snap.resumen};
 }
 function _b64ToUint8(b64){
   const bin = atob(b64);
@@ -5567,6 +5753,11 @@ async function ejecutarIngestaLocal(files, guardar){
       casos_cerrados: cerrados.length, filas_pacientes_cargadas: todosPacientes.length, guardado:false};
   }
 
+  // Se guarda la marca de "última actualización" que había ANTES de esta
+  // carga -- si más adelante alguien deshace esta carga, la esquina vuelve a
+  // mostrar la fecha de la carga anterior en vez de quedar apuntando a una
+  // carga que ya no existe.
+  const marcaAntesDeEstaCarga = await obtenerUltimaActualizacionInforme(true);
   let nIns=0, nUpd=0, nCerr=0, nPac=0, reasignados=0;
 
   /* ------------------------------------------------------------
@@ -5587,8 +5778,19 @@ async function ejecutarIngestaLocal(files, guardar){
   const pacientesNuevosBatch = [];
   const casosActualizarBatch = []; // {caso_id, cambios}
   const pacientesDesactivarBatch = []; // {paciente_row_id}
+  // Para poder "Deshacer última carga" después: por cada caso que se va a
+  // modificar (continúa o se cierra) se guarda su fila COMPLETA tal como
+  // estaba ANTES de este cambio -- no solo los campos que cambian -- para
+  // poder devolverla exactamente a ese estado con un solo PATCH si hace
+  // falta revertir.
+  const snapshotCasosActualizados = []; // {caso_id, previo: fila completa de antes}
 
   function filaPaciente(casoId, p){
+    // fecha_creacion/fecha_actualizacion: en una fila recién insertada las
+    // dos arrancan iguales (se creó y "se actualizó por última vez" en el
+    // mismo instante) -- fecha_actualizacion se mueve después, cada vez que
+    // esta fila se toque de verdad (por ejemplo, al desactivarla más abajo).
+    const ahora = ldbAhora();
     return {
       paciente_row_id: uid(), caso_id: casoId, numero_pedido: p.numero_pedido||'',
       fecha_pedido: p.fecha_pedido?p.fecha_pedido.toISOString():'',
@@ -5598,6 +5800,7 @@ async function ejecutarIngestaLocal(files, guardar){
       stock_erp: p.stock_erp??'', stock_seg: p.stock_seg??'', disponible: p.disponible??'', pventa: p.pventa??'', pesos: p.pesos??'',
       laboratorio: p.laboratorio||'', agente: p.agente||'', nit_paciente: p.nit_paciente||'',
       nombre_paciente: p.nombre_paciente||'', cuenta: p.cuenta||'', observaciones: p.observaciones||'', activo:true,
+      fecha_creacion: ahora, fecha_actualizacion: ahora,
     };
   }
 
@@ -5656,6 +5859,7 @@ async function ejecutarIngestaLocal(files, guardar){
       cambios.ultima_bitacora_usuario_id = '';
     }
     casosActualizarBatch.push({caso_id: casoPrevio.caso_id, cambios});
+    snapshotCasosActualizados.push({caso_id: casoPrevio.caso_id, previo: casoPrevio});
 
     // Reemplazar el detalle de pacientes: desactivar los anteriores de este
     // caso (ya los tenemos en memoria de la única lectura de arriba) y
@@ -5670,6 +5874,7 @@ async function ejecutarIngestaLocal(files, guardar){
 
   for(const c of cerrados){
     casosActualizarBatch.push({caso_id: c.caso_id, cambios: {activo:false, fecha_cierre: ldbAhora()}});
+    snapshotCasosActualizados.push({caso_id: c.caso_id, previo: c});
     nCerr++;
   }
 
@@ -5702,7 +5907,7 @@ async function ejecutarIngestaLocal(files, guardar){
     for(const {paciente_row_id} of pacientesDesactivarBatch){
       const filaFresca = porIdPac.get(String(paciente_row_id));
       if(!filaFresca){ erroresParciales.push(`Paciente ${paciente_row_id} ya no se encontro al guardar (posible edicion simultanea) -- se omitio.`); continue; }
-      items.push({filaConIndice: filaFresca, cambios: {activo:false}});
+      items.push({filaConIndice: filaFresca, cambios: {activo:false, fecha_actualizacion: ldbAhora()}});
     }
     // Antes: una llamada PATCH por paciente, una tras otra. Ahora se manda
     // en lotes de hasta 20 por una sola llamada a Graph -- con cientos de
@@ -5735,7 +5940,36 @@ async function ejecutarIngestaLocal(files, guardar){
   // quien cargó) sepan cuándo fue la última carga real de datos. Va al final,
   // después de que todo lo demás ya se guardó bien.
   const sesionActual = getSesion();
-  await guardarUltimaActualizacionInforme(sesionActual ? sesionActual.nombre : '');
+  const nombreUsuarioActual = sesionActual ? sesionActual.nombre : '';
+  await guardarUltimaActualizacionInforme(nombreUsuarioActual);
+
+  // ---- Respaldo para poder "Deshacer última carga" ----
+  // Se guarda DESPUÉS de que todo lo demás ya se escribió bien (si algo de
+  // arriba falló a medias, mejor no dejar un respaldo que prometa un
+  // "deshacer" completo de algo que nunca terminó de guardarse). Con esto
+  // alcanza para revertir la carga en su totalidad:
+  //  - los casos_nuevos_ids se BORRAN (no existían antes de esta carga)
+  //  - cada caso_actualizado se devuelve a su fila completa "previo"
+  //  - los pacientes_nuevos_ids se BORRAN
+  //  - los pacientes_reactivar_ids (los que esta carga desactivó) vuelven a activo:true
+  // Solo se guarda UN respaldo (el de la carga más reciente) -- deshacer
+  // siempre deshace la última carga, no una carga antigua.
+  try{
+    await guardarRespaldoUltimaCarga({
+      fecha: ldbAhora(), usuario: nombreUsuarioActual,
+      marca_anterior: marcaAntesDeEstaCarga,
+      casos_nuevos_ids: casosNuevosBatch.map(c=>c.caso_id),
+      casos_actualizados: snapshotCasosActualizados,
+      pacientes_nuevos_ids: pacientesNuevosBatch.map(p=>p.paciente_row_id),
+      pacientes_reactivar_ids: pacientesDesactivarBatch.map(p=>p.paciente_row_id),
+      resumen: {nuevos_insertados:nIns, casos_actualizados:nUpd, casos_cerrados:nCerr, pacientes_nuevos:nPac},
+    });
+  }catch(e){
+    // Igual que con la marca de "última actualización": si esto falla, la
+    // carga real de datos YA se guardó bien -- solo se pierde la posibilidad
+    // de deshacer ESTA carga puntual, no el trabajo en sí.
+    console.error('No se pudo guardar el respaldo para poder deshacer esta carga:', e);
+  }
 
   return {nuevos_insertados:nIns, casos_actualizados:nUpd, casos_cerrados:nCerr,
     filas_pacientes_cargadas:nPac, reasignados_de_modulo:reasignados, guardado:true,
@@ -6047,7 +6281,7 @@ document.getElementById('carga-procesar').addEventListener('click', async ()=>{
       ${ensayo ? '<br><br>Si estos números se ven bien, desmarca "Modo ensayo" arriba y vuelve a procesar para guardar de verdad.' : ''}${advertencias}
     </div>`;
     toast(ensayo ? 'Ensayo completado.' : 'Datos guardados.', true);
-    if(!ensayo){ invalidarCacheDatos(); renderUltimaActualizacionInforme(true); }
+    if(!ensayo){ invalidarCacheDatos(); renderUltimaActualizacionInforme(true); refreshDeshacerCargaPanel(); }
   } catch(err){
     // Si el error ocurrió durante el guardado real (no en el ensayo), es
     // posible que parte de la carga ya se haya escrito antes del corte --
@@ -6060,6 +6294,66 @@ document.getElementById('carga-procesar').addEventListener('click', async ()=>{
     toast('No se pudo procesar la carga — revisa el detalle en pantalla.');
   } finally {
     btn.disabled = cargaArchivos.length === 0;
+  }
+});
+
+/* ---------- Deshacer última carga ---------- */
+async function refreshDeshacerCargaPanel(){
+  const sesion = getSesion();
+  if(!sesion || sesion.rol!=='admin') return; // el panel ni siquiera es visible
+  const info = document.getElementById('deshacer-carga-info');
+  const btn = document.getElementById('deshacer-carga-btn');
+  info.className = 'empty';
+  info.textContent = 'Revisando si hay alguna carga reciente para deshacer...';
+  btn.style.display = 'none';
+  try{
+    const r = await ldbInfoRespaldoUltimaCarga();
+    if(!r){
+      info.textContent = 'No hay ninguna carga reciente para deshacer.';
+      return;
+    }
+    info.innerHTML = `Última carga: <strong>${esc(fechaHoraCorta(r.fecha))}</strong>${r.usuario?' · '+esc(r.usuario):''}<br>
+      Casos nuevos: <strong>${r.nuevos_insertados}</strong> · Actualizados: <strong>${r.casos_actualizados}</strong> ·
+      Cerrados: <strong>${r.casos_cerrados}</strong> · Pacientes: <strong>${r.pacientes_nuevos}</strong>`;
+    btn.style.display = '';
+    btn.dataset.resumen = JSON.stringify(r);
+  }catch(err){
+    info.innerHTML = `<span style="color:var(--red);">No se pudo revisar si hay algo para deshacer: ${esc(err.message)}</span>`;
+  }
+}
+document.getElementById('deshacer-carga-btn').addEventListener('click', ()=>{
+  const r = JSON.parse(document.getElementById('deshacer-carga-btn').dataset.resumen || '{}');
+  document.getElementById('deshacer-carga-sub').innerHTML =
+    `Vas a deshacer la carga del <strong>${esc(fechaHoraCorta(r.fecha))}</strong>${r.usuario?' ('+esc(r.usuario)+')':''}: ` +
+    `${r.nuevos_insertados} caso(s) nuevo(s) se borrarán, ${r.casos_actualizados} caso(s) actualizado(s) y ${r.casos_cerrados} cerrado(s) volverán a su estado anterior, ` +
+    `y ${r.pacientes_nuevos} fila(s) de pacientes cargadas en ese momento se borrarán.`;
+  document.getElementById('deshacer-carga-overlay').classList.add('active');
+});
+document.getElementById('deshacer-carga-cancel').addEventListener('click', ()=>{
+  document.getElementById('deshacer-carga-overlay').classList.remove('active');
+});
+document.getElementById('deshacer-carga-confirm').addEventListener('click', async ()=>{
+  const btnConfirm = document.getElementById('deshacer-carga-confirm');
+  btnConfirm.disabled = true;
+  btnConfirm.textContent = 'Deshaciendo...';
+  try{
+    const r = await ldbDeshacerUltimaCarga();
+    document.getElementById('deshacer-carga-overlay').classList.remove('active');
+    toast(`Carga deshecha correctamente (${r.nuevos_insertados} nuevo(s) borrado(s), ${r.casos_actualizados+r.casos_cerrados} caso(s) revertido(s)).`, true);
+    renderUltimaActualizacionInforme(true);
+    refreshDeshacerCargaPanel();
+    // Se refresca todo lo que pudo haber cambiado -- no solo el módulo
+    // donde esté parada la persona en este momento.
+    recomputeHome();
+    if(document.getElementById('view-resumen').classList.contains('active')) refreshResumen(true);
+    if(document.getElementById('view-cng').classList.contains('active')) refreshCng();
+    if(document.getElementById('view-abast').classList.contains('active')) refreshAbast();
+    if(document.getElementById('view-aliados').classList.contains('active')) refreshAliados();
+  }catch(err){
+    toast('No se pudo deshacer la carga: ' + err.message);
+  }finally{
+    btnConfirm.disabled = false;
+    btnConfirm.textContent = 'Sí, deshacer por completo';
   }
 });
 
