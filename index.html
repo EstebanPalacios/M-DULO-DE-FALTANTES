@@ -285,6 +285,13 @@
   .kpi.vencidas{border-left-color:var(--red);} .kpi.vencidas .kpi-ic{background:var(--red-bg);color:var(--red);}
   .kpi.hoy{border-left-color:var(--amber);} .kpi.hoy .kpi-ic{background:var(--amber-bg);color:var(--amber);}
   .kpi.futuras{border-left-color:var(--green);} .kpi.futuras .kpi-ic{background:var(--green-bg);color:var(--green);}
+  /* Tarjetas KPI cliqueables (CNG/Abastecimiento/Aliados) -- al hacer clic
+     filtran la tabla del módulo por ese criterio (vencidas/hoy/programadas),
+     igual que un chip de filtro. Se marca cuál está activa. */
+  .kpi-click{cursor:pointer;user-select:none;}
+  .kpi-click:active{transform:translateY(0) scale(.98);}
+  .kpi-click.kpi-active{box-shadow:0 0 0 2px var(--navy),var(--shadow-md);background:rgba(255,255,255,.88);}
+  .kpi-click.kpi-active .val{color:var(--navy);}
 
   .cats-intro{margin:26px 0 12px;}
   .cats-intro h2{margin:0 0 4px;font-size:15px;color:var(--navy);font-weight:800;}
@@ -943,10 +950,10 @@ License: MIT
           <button class="btn-ghost" id="cng-limpiar">Limpiar filtros</button>
         </div>
         <div class="kpis">
-          <div class="kpi total"><div class="lbl">Total</div><div class="val" id="cng-total">0</div><div class="trend">casos en seguimiento</div></div>
-          <div class="kpi vencidas"><div class="lbl">Vencidas</div><div class="val" id="cng-vencidas">0</div><div class="trend">fecha novedad ya pasó</div></div>
-          <div class="kpi hoy"><div class="lbl">Hoy</div><div class="val" id="cng-hoy">0</div><div class="trend">vencen hoy</div></div>
-          <div class="kpi futuras"><div class="lbl">Programadas</div><div class="val" id="cng-futuras">0</div><div class="trend">fecha novedad futura</div></div>
+          <div class="kpi total kpi-click" data-kpi-filter="total" title="Ver todos"><div class="lbl">Total</div><div class="val" id="cng-total">0</div><div class="trend">casos en seguimiento</div></div>
+          <div class="kpi vencidas kpi-click" data-kpi-filter="vencidas" title="Filtrar por vencidas"><div class="lbl">Vencidas</div><div class="val" id="cng-vencidas">0</div><div class="trend">fecha entrega antigua ya pasó</div></div>
+          <div class="kpi hoy kpi-click" data-kpi-filter="hoy" title="Filtrar por hoy"><div class="lbl">Hoy</div><div class="val" id="cng-hoy">0</div><div class="trend">vencen hoy</div></div>
+          <div class="kpi futuras kpi-click" data-kpi-filter="futuras" title="Filtrar por programadas"><div class="lbl">Programadas</div><div class="val" id="cng-futuras">0</div><div class="trend">programadas</div></div>
         </div>
         <div class="panel">
           <div class="panel-head">
@@ -967,10 +974,10 @@ License: MIT
           <button class="btn-primary" id="ab-consultar">Consultar</button>
         </div>
         <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));">
-          <div class="kpi total"><div class="lbl">Registros</div><div class="val" id="ab-total">0</div><div class="trend">en seguimiento</div></div>
-          <div class="kpi vencidas"><div class="lbl">Vencidas</div><div class="val" id="ab-vencidas">0</div><div class="trend">fecha entrega antigua ya pasó</div></div>
-          <div class="kpi hoy"><div class="lbl">Hoy</div><div class="val" id="ab-hoy">0</div><div class="trend">vencen hoy</div></div>
-          <div class="kpi futuras"><div class="lbl">Mayores a hoy</div><div class="val" id="ab-futuras">0</div><div class="trend">programadas</div></div>
+          <div class="kpi total kpi-click" data-kpi-filter="total" title="Ver todos"><div class="lbl">Registros</div><div class="val" id="ab-total">0</div><div class="trend">en seguimiento</div></div>
+          <div class="kpi vencidas kpi-click" data-kpi-filter="vencidas" title="Filtrar por vencidas"><div class="lbl">Vencidas</div><div class="val" id="ab-vencidas">0</div><div class="trend">fecha entrega antigua ya pasó</div></div>
+          <div class="kpi hoy kpi-click" data-kpi-filter="hoy" title="Filtrar por hoy"><div class="lbl">Hoy</div><div class="val" id="ab-hoy">0</div><div class="trend">vencen hoy</div></div>
+          <div class="kpi futuras kpi-click" data-kpi-filter="futuras" title="Filtrar por programadas"><div class="lbl">Mayores a hoy</div><div class="val" id="ab-futuras">0</div><div class="trend">programadas</div></div>
           <div class="kpi hoy"><div class="lbl">Prioritarios</div><div class="val" id="ab-prio">0</div><div class="trend">marcados urgentes</div></div>
           <div class="kpi futuras"><div class="lbl">Con traslado activo</div><div class="val" id="ab-traslado">0</div><div class="trend">registros con traslado o solicitud</div></div>
           <div class="kpi vencidas"><div class="lbl">Unidades pendientes</div><div class="val" id="ab-neg">0</div><div class="trend">total en falta (desabastecimiento)</div></div>
@@ -1005,10 +1012,10 @@ License: MIT
           <button class="btn-ghost" id="al-limpiar">Limpiar filtros</button>
         </div>
         <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));">
-          <div class="kpi total"><div class="lbl">Registros</div><div class="val" id="al-total">0</div><div class="trend">bodegas en gestión</div></div>
-          <div class="kpi vencidas"><div class="lbl">Vencidas</div><div class="val" id="al-vencidas">0</div><div class="trend">fecha entrega antigua ya pasó</div></div>
-          <div class="kpi hoy"><div class="lbl">Hoy</div><div class="val" id="al-hoy">0</div><div class="trend">vencen hoy</div></div>
-          <div class="kpi futuras"><div class="lbl">Mayores a hoy</div><div class="val" id="al-futuras">0</div><div class="trend">programadas</div></div>
+          <div class="kpi total kpi-click" data-kpi-filter="total" title="Ver todos"><div class="lbl">Registros</div><div class="val" id="al-total">0</div><div class="trend">bodegas en gestión</div></div>
+          <div class="kpi vencidas kpi-click" data-kpi-filter="vencidas" title="Filtrar por vencidas"><div class="lbl">Vencidas</div><div class="val" id="al-vencidas">0</div><div class="trend">fecha entrega antigua ya pasó</div></div>
+          <div class="kpi hoy kpi-click" data-kpi-filter="hoy" title="Filtrar por hoy"><div class="lbl">Hoy</div><div class="val" id="al-hoy">0</div><div class="trend">vencen hoy</div></div>
+          <div class="kpi futuras kpi-click" data-kpi-filter="futuras" title="Filtrar por programadas"><div class="lbl">Mayores a hoy</div><div class="val" id="al-futuras">0</div><div class="trend">programadas</div></div>
           <div class="kpi hoy"><div class="lbl">Prioritarios</div><div class="val" id="al-prio">0</div><div class="trend">marcados urgentes</div></div>
           <div class="kpi futuras"><div class="lbl">Moléculas</div><div class="val" id="al-molec">0</div><div class="trend">códigos distintos</div></div>
           <div class="kpi vencidas"><div class="lbl">Sin gestionar</div><div class="val" id="al-sinbit">0</div><div class="trend">sin ninguna nota todavía</div></div>
@@ -1621,9 +1628,15 @@ function showView(name){
   document.getElementById('crumbs').textContent = name==='home' ? 'Gestión de faltantes' : 'Gestión de faltantes / '+titles[name];
   if(name==='home') recomputeHome();
   if(name==='resumen') refreshResumen();
-  if(name==='cng' && !cacheVigente('cng')){ refreshCng(); marcarCacheFresca('cng'); }
-  if(name==='abast' && !cacheVigente('abast')){ refreshAbast(); marcarCacheFresca('abast'); }
-  if(name==='aliados' && !cacheVigente('aliados')){ refreshAliados(); marcarCacheFresca('aliados'); }
+  // OJO: NO se marca la caché como "fresca" aquí -- cada refreshX ya lo hace
+  // por su cuenta, pero solo DESPUÉS de que la carga terminó bien. Marcarla
+  // aquí (antes de que la promesa resuelva) hacía que, si la carga fallaba
+  // (red, Graph ocupado), la caché quedara marcada como fresca igual y la
+  // persona viera la tabla vacía al volver a esta sección sin que se
+  // reintentara solo -- tocaba darle "Consultar" a mano para notarlo.
+  if(name==='cng' && !cacheVigente('cng')){ refreshCng(); }
+  if(name==='abast' && !cacheVigente('abast')){ refreshAbast(); }
+  if(name==='aliados' && !cacheVigente('aliados')){ refreshAliados(); }
   if(name==='cargar') refreshDeshacerCargaPanel();
 }
 document.querySelectorAll('.nav-item').forEach(el=>{
@@ -3192,7 +3205,7 @@ document.querySelectorAll('#cng-urg-chips .chip').forEach(c=>c.addEventListener(
 }));
 document.getElementById('cng-consultar').addEventListener('click', refreshCng);
 document.getElementById('cng-limpiar').addEventListener('click', ()=>{
-  cngUrgFilter=''; cngBodegaSet.clear(); cngConvenioSet.clear();
+  cngUrgFilter=''; cngFechaFilter=''; cngBodegaSet.clear(); cngConvenioSet.clear();
   document.querySelectorAll('#cng-urg-chips .chip').forEach(x=>x.classList.remove('active'));
   document.querySelector('#cng-urg-chips .chip[data-v=""]').classList.add('active');
   reiniciarEstadoTabla('cng-table');
@@ -3206,13 +3219,51 @@ function renderCngFiltrosBodegaConvenio(){
   multiSelect('cng-ms-bodega', 'Bodega', bodegas, cngBodegaSet, renderCng, bodegaLabel);
   multiSelect('cng-ms-convenio', 'Convenio', convenios, cngConvenioSet, renderCng);
 }
+// Filtro por estado de fecha activado al hacer clic en una tarjeta KPI
+// (Total/Vencidas/Hoy/Programadas) -- '' significa sin filtro de fecha.
+let cngFechaFilter = '';
 function cngFilteredRows(){
+  const hoyStr = ldbHoy();
   return casosCNG.filter(r=>{
     if(cngUrgFilter==='Si' && !r.prioritario) return false;
     if(cngUrgFilter==='No' && r.prioritario) return false;
     if(cngBodegaSet.size && !cngBodegaSet.has(String(r.bodega_id))) return false;
     if(cngConvenioSet.size && !conveniosDe(r.cuenta).some(c=>cngConvenioSet.has(c))) return false;
+    if(cngFechaFilter){
+      const f = r.fecha_entrega_antigua ? r.fecha_entrega_antigua.slice(0,10) : null;
+      if(!f) return false;
+      if(cngFechaFilter==='vencidas' && !(f < hoyStr)) return false;
+      if(cngFechaFilter==='hoy' && f !== hoyStr) return false;
+      if(cngFechaFilter==='futuras' && !(f > hoyStr)) return false;
+    }
     return true;
+  });
+}
+// Resalta la tarjeta KPI que corresponde al filtro de fecha activo (o
+// "total" cuando no hay ninguno) y quita el resaltado de las demás.
+// idsPorFiltro: {total:'cng-total', vencidas:'cng-vencidas', hoy:'cng-hoy', futuras:'cng-futuras'}
+function marcarKpiActiva(idsPorFiltro, filtroActivo){
+  Object.entries(idsPorFiltro).forEach(([filtro, id])=>{
+    const val = document.getElementById(id);
+    const card = val && val.closest('.kpi');
+    if(!card) return;
+    card.classList.toggle('kpi-active', filtroActivo ? filtro===filtroActivo : filtro==='total');
+  });
+}
+// Engancha las 4 tarjetas Total/Vencidas/Hoy/Programadas de un módulo para
+// que al hacer clic filtren la tabla por ese criterio (clic de nuevo en la
+// misma, o en "Total", limpia el filtro de fecha).
+function wireKpiClickFiltro(idsPorFiltro, getFiltro, setFiltro, rerender){
+  Object.entries(idsPorFiltro).forEach(([filtro, id])=>{
+    const val = document.getElementById(id);
+    const card = val && val.closest('.kpi-click');
+    if(!card) return;
+    card.addEventListener('click', ()=>{
+      const actual = getFiltro();
+      const nuevo = (filtro==='total' || actual===filtro) ? '' : filtro;
+      setFiltro(nuevo);
+      rerender();
+    });
   });
 }
 function updateCngKpis(rows){
@@ -3223,7 +3274,9 @@ function updateCngKpis(rows){
   document.getElementById('cng-vencidas').textContent = formatoNum(rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) < hoyStr).length);
   document.getElementById('cng-hoy').textContent = formatoNum(rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) === hoyStr).length);
   document.getElementById('cng-futuras').textContent = formatoNum(rows.filter(r=>r.fecha_entrega_antigua && r.fecha_entrega_antigua.slice(0,10) > hoyStr).length);
+  marcarKpiActiva({total:'cng-total', vencidas:'cng-vencidas', hoy:'cng-hoy', futuras:'cng-futuras'}, cngFechaFilter);
 }
+wireKpiClickFiltro({total:'cng-total', vencidas:'cng-vencidas', hoy:'cng-hoy', futuras:'cng-futuras'}, ()=>cngFechaFilter, v=>cngFechaFilter=v, renderCng);
 /* Agrupa los casos (uno por Bodega+Código) en filas de molécula (por Código,
    sumando entre todas las bodegas donde aparece) — igual a la hoja de ejemplo. */
 function agruparCngPorMolecula(rows){
@@ -3451,7 +3504,13 @@ function wireCngPacienteDetalle(detalle, molecula){
     openTransfer(casoIds, 'CNG', `${seleccionados.size} paciente(s) seleccionados`);
   });
 }
+// Token de carga: evita que dos refreshCng() superpuestos (doble clic en
+// "Consultar", o uno disparado por navegación mientras otro seguía en
+// vuelo) terminen pisando datos nuevos con una respuesta vieja que resolvió
+// después -- solo la carga más reciente puede escribir en casosCNG/pintar.
+let _cngCargaToken = 0;
 async function refreshCng(silencioso){
+  const miToken = ++_cngCargaToken;
   // "silencioso" evita el parpadeo de "Cargando..." (skeleton) que se
   // sentía como si la página entera se recargara -- se usa después de
   // guardar una nota de bitácora, donde la tabla ya tiene datos buenos en
@@ -3464,8 +3523,12 @@ async function refreshCng(silencioso){
     // detalle ya cargado para no parpadear.
     cngMoleculasPorCodigo = {};
   }
-  try{ casosCNG = await cargarModulo('CNG'); }
-  catch(err){ toast(err.message || 'No se pudo cargar CNG.'); if(!silencioso) casosCNG = []; }
+  let datosNuevos, errorCarga;
+  try{ datosNuevos = await cargarModulo('CNG'); }
+  catch(err){ errorCarga = err; }
+  if(miToken !== _cngCargaToken) return; // una carga más nueva ya está en curso o ya terminó
+  if(errorCarga){ toast(errorCarga.message || 'No se pudo cargar CNG.'); if(!silencioso) casosCNG = []; }
+  else{ casosCNG = datosNuevos; }
   renderCngFiltrosBodegaConvenio();
   renderCng();
   marcarCacheFresca('cng');
@@ -3492,12 +3555,21 @@ function renderAbFiltrosBodegaConvenio(){
   multiSelect('ab-ms-bodega', 'Bodega', bodegas, abBodegaSet, renderAbast, bodegaLabel);
   multiSelect('ab-ms-convenio', 'Convenio', convenios, abConvenioSet, renderAbast);
 }
+let abFechaFilter = '';
 function abFilteredRows(){
+  const hoyStr = ldbHoy();
   return casosAbast.filter(r=>{
     if(abPrioFilter==='Si' && !r.prioritario) return false;
     if(abPrioFilter==='No' && r.prioritario) return false;
     if(abBodegaSet.size && !abBodegaSet.has(String(r.bodega_id))) return false;
     if(abConvenioSet.size && !conveniosDe(r.cuenta).some(c=>abConvenioSet.has(c))) return false;
+    if(abFechaFilter){
+      const f = r.fecha_entrega_antigua ? r.fecha_entrega_antigua.slice(0,10) : null;
+      if(!f) return false;
+      if(abFechaFilter==='vencidas' && !(f < hoyStr)) return false;
+      if(abFechaFilter==='hoy' && f !== hoyStr) return false;
+      if(abFechaFilter==='futuras' && !(f > hoyStr)) return false;
+    }
     return true;
   });
 }
@@ -3526,7 +3598,9 @@ function updateAbastKpis(rows){
   document.getElementById('ab-vencidas').textContent = formatoNum(conFechaAb.filter(r=>r.fecha_entrega_antigua.slice(0,10) < hoyStrAb).length);
   document.getElementById('ab-hoy').textContent = formatoNum(conFechaAb.filter(r=>r.fecha_entrega_antigua.slice(0,10) === hoyStrAb).length);
   document.getElementById('ab-futuras').textContent = formatoNum(conFechaAb.filter(r=>r.fecha_entrega_antigua.slice(0,10) > hoyStrAb).length);
+  marcarKpiActiva({total:'ab-total', vencidas:'ab-vencidas', hoy:'ab-hoy', futuras:'ab-futuras'}, abFechaFilter);
 }
+wireKpiClickFiltro({total:'ab-total', vencidas:'ab-vencidas', hoy:'ab-hoy', futuras:'ab-futuras'}, ()=>abFechaFilter, v=>abFechaFilter=v, renderAbast);
 const AB_COLUMNS = [
   {key:'_select', label:'', filter:false, sort:false},
   {key:'codigo', label:'Código', filter:true, sort:true, format:r=>codigoConTransferido(r.codigo, r.transferido, [r.caso_id], 'Abastecimiento')},
@@ -3592,7 +3666,7 @@ document.getElementById('ab-bulk-transfer').addEventListener('click', ()=>{
   openTransfer([...abSelected], 'Abastecimiento', `${abSelected.size} producto(s) seleccionados`);
 });
 document.getElementById('ab-limpiar').addEventListener('click', ()=>{
-  abPrioFilter=''; abSelected.clear(); abBodegaSet.clear(); abConvenioSet.clear();
+  abPrioFilter=''; abFechaFilter=''; abSelected.clear(); abBodegaSet.clear(); abConvenioSet.clear();
   document.querySelectorAll('#ab-prio-chips .chip').forEach(x=>x.classList.remove('active'));
   document.querySelector('#ab-prio-chips .chip[data-v=""]').classList.add('active');
   reiniciarEstadoTabla('ab-table');
@@ -3616,10 +3690,16 @@ document.getElementById('ab-exportar').addEventListener('click', async ()=>{
     ['Días abierto', r=>r.dias_abierto],
   ], rows);
 });
+let _abCargaToken = 0;
 async function refreshAbast(silencioso){
+  const miToken = ++_abCargaToken;
   if(!silencioso) document.getElementById('ab-table').innerHTML = skeletonTabla();
-  try{ casosAbast = await cargarModulo('Abastecimiento'); }
-  catch(err){ toast(err.message || 'No se pudo cargar Abastecimiento.'); if(!silencioso) casosAbast = []; }
+  let datosNuevos, errorCarga;
+  try{ datosNuevos = await cargarModulo('Abastecimiento'); }
+  catch(err){ errorCarga = err; }
+  if(miToken !== _abCargaToken) return;
+  if(errorCarga){ toast(errorCarga.message || 'No se pudo cargar Abastecimiento.'); if(!silencioso) casosAbast = []; }
+  else{ casosAbast = datosNuevos; }
   renderAbFiltrosBodegaConvenio();
   renderAbast();
   marcarCacheFresca('abast');
@@ -3641,7 +3721,7 @@ document.querySelectorAll('#al-urg-chips .chip').forEach(c=>c.addEventListener('
 }));
 document.getElementById('al-consultar').addEventListener('click', refreshAliados);
 document.getElementById('al-limpiar').addEventListener('click', ()=>{
-  alUrgFilter=''; alBodegaSet.clear(); alConvenioSet.clear();
+  alUrgFilter=''; alFechaFilter=''; alBodegaSet.clear(); alConvenioSet.clear();
   document.querySelectorAll('#al-urg-chips .chip').forEach(x=>x.classList.remove('active'));
   document.querySelector('#al-urg-chips .chip[data-v=""]').classList.add('active');
   reiniciarEstadoTabla('al-table');
@@ -3655,12 +3735,21 @@ function renderAlFiltrosBodegaConvenio(){
   multiSelect('al-ms-bodega', 'Bodega', bodegas, alBodegaSet, renderAliados, bodegaLabel);
   multiSelect('al-ms-convenio', 'Convenio', convenios, alConvenioSet, renderAliados);
 }
+let alFechaFilter = '';
 function alFilteredRows(){
+  const hoyStr = ldbHoy();
   return casosAliados.filter(r=>{
     if(alUrgFilter==='Si' && !r.prioritario) return false;
     if(alUrgFilter==='No' && r.prioritario) return false;
     if(alBodegaSet.size && !alBodegaSet.has(String(r.bodega_id))) return false;
     if(alConvenioSet.size && !conveniosDe(r.cuenta).some(c=>alConvenioSet.has(c))) return false;
+    if(alFechaFilter){
+      const f = r.fecha_entrega_antigua ? r.fecha_entrega_antigua.slice(0,10) : null;
+      if(!f) return false;
+      if(alFechaFilter==='vencidas' && !(f < hoyStr)) return false;
+      if(alFechaFilter==='hoy' && f !== hoyStr) return false;
+      if(alFechaFilter==='futuras' && !(f > hoyStr)) return false;
+    }
     return true;
   });
 }
@@ -3754,7 +3843,9 @@ function updateAlKpis(rows){
   document.getElementById('al-vencidas').textContent = formatoNum(conFechaAl.filter(r=>r.fecha_entrega_antigua.slice(0,10) < hoyStrAl).length);
   document.getElementById('al-hoy').textContent = formatoNum(conFechaAl.filter(r=>r.fecha_entrega_antigua.slice(0,10) === hoyStrAl).length);
   document.getElementById('al-futuras').textContent = formatoNum(conFechaAl.filter(r=>r.fecha_entrega_antigua.slice(0,10) > hoyStrAl).length);
+  marcarKpiActiva({total:'al-total', vencidas:'al-vencidas', hoy:'al-hoy', futuras:'al-futuras'}, alFechaFilter);
 }
+wireKpiClickFiltro({total:'al-total', vencidas:'al-vencidas', hoy:'al-hoy', futuras:'al-futuras'}, ()=>alFechaFilter, v=>alFechaFilter=v, renderAliados);
 function renderAliados(){
   const rows = alFilteredRows();
   updateAlKpis(rows);
@@ -3818,10 +3909,16 @@ function renderAliados(){
     },
   });
 }
+let _alCargaToken = 0;
 async function refreshAliados(silencioso){
+  const miToken = ++_alCargaToken;
   if(!silencioso) document.getElementById('al-table').innerHTML = skeletonTabla();
-  try{ casosAliados = await cargarModulo('Aliados'); }
-  catch(err){ toast(err.message || 'No se pudo cargar D. Aliados.'); if(!silencioso) casosAliados = []; }
+  let datosNuevos, errorCarga;
+  try{ datosNuevos = await cargarModulo('Aliados'); }
+  catch(err){ errorCarga = err; }
+  if(miToken !== _alCargaToken) return;
+  if(errorCarga){ toast(errorCarga.message || 'No se pudo cargar D. Aliados.'); if(!silencioso) casosAliados = []; }
+  else{ casosAliados = datosNuevos; }
   renderAlFiltrosBodegaConvenio();
   renderAliados();
   marcarCacheFresca('aliados');
@@ -4064,12 +4161,24 @@ async function iniciarSesionMicrosoft(){
   await msalApp.loginRedirect({ scopes: ['User.Read', 'Files.ReadWrite'] });
 }
 
+// Cuando esto está en `true`, obtenerTokenGraph() NUNCA debe navegar fuera
+// de la página (acquireTokenRedirect) -- se usa para las llamadas de
+// revalidación en segundo plano (cada 15 min, o al volver a la pestaña),
+// donde la persona no está esperando frente a un botón: una redirección ahí
+// se sentía como que "la sesión se cerró sola" mientras solo estaba ausente.
+let _graphSoloSilencioso = false;
 async function obtenerTokenGraph(){
   const solicitud = { scopes: ['User.Read', 'Files.ReadWrite'], account: msalCuenta };
   try{
     const r = await msalApp.acquireTokenSilent(solicitud);
     return r.accessToken;
   } catch(e){
+    if(_graphSoloSilencioso){
+      // Llamada de fondo, sin interacción visible: no se navega a Microsoft.
+      // Se deja que quien llamó decida qué hacer (revalidarSesionEnSegundoPlano
+      // simplemente conserva la sesión actual y lo intenta de nuevo más tarde).
+      throw new Error('No se pudo renovar el token en segundo plano.');
+    }
     // La renovación silenciosa falló (el token expiró y hace falta que la
     // persona vuelva a autenticarse). Se usa el mismo mecanismo de
     // REDIRECCIÓN de página completa que el login inicial -- nunca un
@@ -4883,7 +4992,11 @@ async function ldbVerificarLoginMicrosoft(){
   const email = (msalCuenta.username || '').toLowerCase();
   const usuarios = await leerTabla('TablaUsuarios', true);
   const u = usuarios.find(x=> (x.email||'').toLowerCase()===email && x.activo);
-  if(!u) throw new Error(`Tu correo (${msalCuenta.username}) inició sesión con Microsoft correctamente, pero no tiene acceso configurado. Comunícate con el administrador.`);
+  if(!u){
+    const err = new Error(`Tu correo (${msalCuenta.username}) inició sesión con Microsoft correctamente, pero no tiene acceso configurado. Comunícate con el administrador.`);
+    err.sinAcceso = true; // distingue "ya no tiene acceso" de un error transitorio (red, token, etc.)
+    throw err;
+  }
   return {usuario_id:u.usuario_id, nombre:u.nombre || msalCuenta.name || email, rol:u.rol, modulo_asignado:u.modulo_asignado};
 }
 
@@ -6353,6 +6466,7 @@ async function iniciarAppLocal(){
   }
 }
 async function revalidarSesionEnSegundoPlano(sesionCacheada){
+  _graphSoloSilencioso = true;
   try{
     const fresca = await ldbVerificarLoginMicrosoft();
     const cambioRol = fresca.rol !== sesionCacheada.rol || fresca.modulo_asignado !== sesionCacheada.modulo_asignado;
@@ -6369,10 +6483,23 @@ async function revalidarSesionEnSegundoPlano(sesionCacheada){
       toast('Tu perfil de acceso cambió -- se actualizaron tus permisos.', true);
     }
   } catch(err){
-    // Ya no tiene una fila activa en "Usuarios" (lo desactivaron o lo
-    // borraron) -- se cierra la sesión de la app de inmediato en vez de
-    // dejarlo seguir usando los permisos que tenía guardados en caché.
-    cerrarSesion();
+    if(err && err.sinAcceso){
+      // Caso real: ya no tiene una fila activa en "Usuarios" (lo
+      // desactivaron o lo borraron) -- se cierra la sesión de la app de
+      // inmediato en vez de dejarlo seguir usando los permisos que tenía
+      // guardados en caché.
+      cerrarSesion();
+    } else {
+      // Cualquier otro error (token que no se pudo renovar en silencio,
+      // red intermitente, Graph ocupado, etc.) -- NO se cierra la sesión.
+      // Se conserva lo que ya había en caché y se reintenta en el próximo
+      // ciclo de revalidación; así una ausencia temporal (o una renovación
+      // de token que necesitaba interacción) ya no se siente como un
+      // cierre de sesión inesperado.
+      console.warn('No se pudo revalidar la sesión en segundo plano -- se conserva la sesión actual y se reintentará más tarde.', err);
+    }
+  } finally {
+    _graphSoloSilencioso = false;
   }
 }
 // La revalidación de arriba solo corría UNA vez, justo al cargar la
