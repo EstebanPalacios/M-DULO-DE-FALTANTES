@@ -2488,7 +2488,7 @@ async function refreshResumen(forzar, silencioso){
   if(necesitaRed && !silencioso && !document.getElementById('rs-hist-toggle').checked){
     document.getElementById('rs-table').innerHTML = skeletonTabla();
   }
-  const r = await obtenerResumenConCache(forzar);
+  const r = await obtenerResumenConActividad(forzar);
   if(!r) return;
   renderResumenKpis();
   renderResumenInsights();
@@ -4286,7 +4286,18 @@ async function graphFetch(path, opciones){
    un mismo libro comparten el mismo Excel ya abierto -- mucho más rápido
    y estable. Se crea una vez por libro (archivo principal, o cada libro
    mensual de bitácora) y se reutiliza durante toda la sesión de la app. */
+// Igual que la caché de resolverArchivoExcel: crear la sesión (createSession)
+// es un viaje de red completo que, sin esto, se repetía en CADA F5 aunque el
+// libro principal casi siempre sigue siendo el mismo de la sesión anterior.
+// Se guarda en sessionStorage (mismo alcance que MSAL -- dura solo mientras
+// la pestaña sigue abierta) y, si ya expiró, graphFetchWB ya sabe detectarlo
+// y crear una nueva sola (ver InvalidSession/SessionNotFound abajo).
+const SP_SESIONES_CACHE_KEY = 'faltantes_sp_sesiones_v1';
 let SP_SESIONES = {}; // itemId -> sessionId (o null si no se pudo crear)
+try{ SP_SESIONES = JSON.parse(sessionStorage.getItem(SP_SESIONES_CACHE_KEY) || '{}') || {}; }catch(e){ SP_SESIONES = {}; }
+function _guardarSesionesExcelEnCache(){
+  try{ sessionStorage.setItem(SP_SESIONES_CACHE_KEY, JSON.stringify(SP_SESIONES)); }catch(e){ /* sessionStorage no disponible -- sin problema, solo se pierde el ahorro */ }
+}
 async function _sesionExcel(driveId, itemId){
   if(itemId in SP_SESIONES) return SP_SESIONES[itemId];
   try{
@@ -4297,6 +4308,7 @@ async function _sesionExcel(driveId, itemId){
   } catch(e){
     SP_SESIONES[itemId] = null; // seguimos sin sesión -- más lento pero funcional
   }
+  _guardarSesionesExcelEnCache();
   return SP_SESIONES[itemId];
 }
 /* Igual que graphFetch, pero para rutas /workbook/... -- agrega el header
@@ -4315,6 +4327,7 @@ async function graphFetchWB(driveId, itemId, path, opciones){
     // llegue a la persona usuaria -- ver comentario ahí.
     if(sesionId && /InvalidSession|SessionNotFound/i.test(e.raw||e.message||'')){
       delete SP_SESIONES[itemId];
+      _guardarSesionesExcelEnCache();
       const nueva = await _sesionExcel(driveId, itemId);
       const headers2 = {...(opciones.headers||{})};
       if(nueva) headers2['workbook-session-id'] = nueva;
@@ -4534,37 +4547,66 @@ async function graphFetchWBBatch(driveId, itemId, subrequests){
   const resultados = new Array(subrequests.length);
   for(let i=0; i<subrequests.length; i+=GRAPH_BATCH_TAM){
     const trozo = subrequests.slice(i, i+GRAPH_BATCH_TAM);
-    const armar = (sid)=>({
-      requests: trozo.map((sr, idx)=>({
+    // "pendientes" son los índices (relativos a `trozo`) que todavía no
+    // tienen una respuesta buena -- arranca con todos.
+    let pendientes = trozo.map((sr, idx)=>idx);
+    const armar = (lista, sid)=>({
+      requests: lista.map(idx=>({
         id: String(idx),
-        method: sr.method || 'PATCH',
-        url: sr.path,
+        method: trozo[idx].method || 'PATCH',
+        url: trozo[idx].path,
         headers: {'Content-Type':'application/json', ...(sid?{'workbook-session-id':sid}:{})},
-        body: sr.body,
+        body: trozo[idx].body,
       })),
     });
-    let r = await graphFetch('/$batch', {method:'POST', body: JSON.stringify(armar(sesionId))});
-    let respuestas = r.responses || [];
-    // Si la sesión guardada ya expiró, Graph responde con error de sesión en
-    // CADA subsolicitud del lote -- se detecta, se crea una sesión nueva y
-    // se reintenta ese mismo lote una vez (igual que hace graphFetchWB con
-    // una sola solicitud).
-    const huboErrorSesion = respuestas.some(resp=> resp.status>=400 &&
-      /InvalidSession|SessionNotFound/i.test(JSON.stringify(resp.body && resp.body.error || '')));
-    if(huboErrorSesion){
-      delete SP_SESIONES[itemId];
-      sesionId = await _sesionExcel(driveId, itemId);
-      r = await graphFetch('/$batch', {method:'POST', body: JSON.stringify(armar(sesionId))});
-      respuestas = r.responses || [];
+    // OJO: el POST a /$batch en sí ya reintenta solo (vía graphFetch) si
+    // Graph rechaza el lote COMPLETO con 429/423/503/504. Pero cuando el
+    // lote sí se procesa, cada SUBSOLICITUD trae su propio status -- con
+    // varias personas cargando datos a la vez (justo lo que pasa en una
+    // prueba con varios usuarios), es normal que ALGUNAS subsolicitudes
+    // puntuales vengan con 429/423 aunque el lote como tal haya respondido
+    // 200. Antes eso se reportaba de una vez como "no se pudo actualizar" y,
+    // con cientos de casos/pacientes en una sola carga, se veía como una
+    // cascada enorme de errores. Ahora se reintenta SOLO lo que falló con un
+    // código reintentable, con la misma espera creciente que usa graphFetch.
+    for(let intento=0; intento<=GRAPH_REINTENTOS_MAX && pendientes.length; intento++){
+      let r = await graphFetch('/$batch', {method:'POST', body: JSON.stringify(armar(pendientes, sesionId))});
+      let respuestas = r.responses || [];
+      // Si la sesión guardada ya expiró, Graph responde con error de sesión en
+      // CADA subsolicitud del lote -- se detecta, se crea una sesión nueva y
+      // se reintenta ese mismo lote una vez (igual que hace graphFetchWB con
+      // una sola solicitud).
+      const huboErrorSesion = respuestas.some(resp=> resp.status>=400 &&
+        /InvalidSession|SessionNotFound/i.test(JSON.stringify(resp.body && resp.body.error || '')));
+      if(huboErrorSesion){
+        delete SP_SESIONES[itemId];
+        _guardarSesionesExcelEnCache();
+        sesionId = await _sesionExcel(driveId, itemId);
+        r = await graphFetch('/$batch', {method:'POST', body: JSON.stringify(armar(pendientes, sesionId))});
+        respuestas = r.responses || [];
+      }
+      const porId = {};
+      respuestas.forEach(resp=>{ porId[resp.id] = resp; });
+      const siguientesPendientes = [];
+      pendientes.forEach(idx=>{
+        const resp = porId[String(idx)];
+        const ok = resp && resp.status>=200 && resp.status<300;
+        if(ok){
+          resultados[i+idx] = {ok:true, body: resp.body};
+        } else if(resp && GRAPH_CODIGOS_REINTENTABLES.has(resp.status) && intento < GRAPH_REINTENTOS_MAX){
+          siguientesPendientes.push(idx); // se reintenta en la próxima vuelta
+        } else {
+          resultados[i+idx] = {ok:false, error: (resp && resp.body && resp.body.error && resp.body.error.message) || 'sin respuesta de Microsoft'};
+        }
+      });
+      pendientes = siguientesPendientes;
+      if(pendientes.length) await _esperar(_tiempoEsperaReintento(intento));
     }
-    const porId = {};
-    respuestas.forEach(resp=>{ porId[resp.id] = resp; });
-    trozo.forEach((sr, idx)=>{
-      const resp = porId[String(idx)];
-      const ok = resp && resp.status>=200 && resp.status<300;
-      resultados[i+idx] = ok
-        ? {ok:true, body: resp.body}
-        : {ok:false, error: (resp && resp.body && resp.body.error && resp.body.error.message) || 'sin respuesta de Microsoft'};
+    // Si de verdad se agotaron los reintentos con algo sin resolver (mala
+    // suerte extrema, throttling sostenido), se marca como fallido en vez de
+    // dejar un hueco en `resultados`.
+    pendientes.forEach(idx=>{
+      if(!resultados[i+idx]) resultados[i+idx] = {ok:false, error:'No se pudo completar tras varios intentos (demasiadas solicitudes al mismo tiempo).'};
     });
   }
   return resultados;
@@ -4987,17 +5029,48 @@ async function ldbTodosCasosEnriquecidos(){
   });
 }
 
-/* ---------- LOGIN — con la cuenta de Microsoft, buscando el rol por correo ---------- */
+/* ---------- LOGIN — con la cuenta de Microsoft, buscando el rol por correo ----------
+   Se compara contra VARIOS identificadores posibles, no solo
+   msalCuenta.username, por dos motivos que en la práctica causaban el
+   típico "escribí bien el correo y aun así me dice que no tengo acceso":
+   1) Un correo guardado en la hoja "Usuarios" con un espacio de más al
+      copiar/pegar (invisible a simple vista) nunca calzaba con un === a
+      secas -- ahora se recorta (trim) de los dos lados.
+   2) Una cuenta INVITADA como externa/invitada (B2B guest) a este tenant de
+      Microsoft -- el caso típico de "le compartí el link a otra cuenta" --
+      inicia sesión con su correo real, pero msalCuenta.username puede venir
+      como un UPN distinto, tipo "nombre_dominio.com#EXT#@tuTenant.onmicrosoft.com"
+      en vez de "nombre@dominio.com". Antes solo se comparaba username, así
+      que a un invitado externo SIEMPRE le daba "no tiene acceso configurado"
+      aunque su correo estuviera perfecto en la hoja de Usuarios. */
+function _correosPosiblesDeCuenta(cuenta){
+  const candidatos = new Set();
+  const agregar = v=>{ if(v) candidatos.add(String(v).trim().toLowerCase()); };
+  agregar(cuenta.username);
+  agregar(cuenta.idTokenClaims && cuenta.idTokenClaims.email);
+  agregar(cuenta.idTokenClaims && cuenta.idTokenClaims.preferred_username);
+  // UPN de invitado externo (#EXT#): "nombre_dominio.com#EXT#@tenant..." ->
+  // se reconstruye el correo real cambiando el primer "_" antes del dominio
+  // por "@" (así arma Azure AD el UPN de un guest a partir del correo).
+  [...candidatos].forEach(c=>{
+    if(c.includes('#ext#')){
+      const antes = c.split('#ext#')[0];
+      const i = antes.lastIndexOf('_');
+      if(i > -1) agregar(antes.slice(0,i) + '@' + antes.slice(i+1));
+    }
+  });
+  return candidatos;
+}
 async function ldbVerificarLoginMicrosoft(){
-  const email = (msalCuenta.username || '').toLowerCase();
+  const correosCuenta = _correosPosiblesDeCuenta(msalCuenta);
   const usuarios = await leerTabla('TablaUsuarios', true);
-  const u = usuarios.find(x=> (x.email||'').toLowerCase()===email && x.activo);
+  const u = usuarios.find(x=> correosCuenta.has((x.email||'').trim().toLowerCase()) && x.activo);
   if(!u){
     const err = new Error(`Tu correo (${msalCuenta.username}) inició sesión con Microsoft correctamente, pero no tiene acceso configurado. Comunícate con el administrador.`);
     err.sinAcceso = true; // distingue "ya no tiene acceso" de un error transitorio (red, token, etc.)
     throw err;
   }
-  return {usuario_id:u.usuario_id, nombre:u.nombre || msalCuenta.name || email, rol:u.rol, modulo_asignado:u.modulo_asignado};
+  return {usuario_id:u.usuario_id, nombre:u.nombre || msalCuenta.name || [...correosCuenta][0], rol:u.rol, modulo_asignado:u.modulo_asignado};
 }
 
 /* ---------- CASOS ---------- */
@@ -5290,6 +5363,14 @@ async function ldbExportarCasos(fechaDesde, fechaHasta){
    que ya vive en la fila (sin abrir archivos); "actividad reciente"
    sitewide sí revisa el libro del mes actual (y el anterior si hace
    falta completar 15). ---------- */
+// Se dividió en 2 fases porque la fase "pesada" (notas + usuarios + abrir el
+// libro de bitácora del MES, que vive en un archivo de Excel APARTE del
+// principal, y a veces también el del mes anterior) podía agregar varios
+// segundos extra a CADA F5, aunque el Panel general (Home) ni siquiera
+// muestra esa actividad reciente -- solo la usa "Resumen de Gestión". Antes
+// esto bloqueaba la pantalla de arranque completa; ahora el Panel general
+// solo espera esta fase RÁPIDA (conteos + casos), y la fase pesada se trae
+// después, en segundo plano, lista para cuando alguien entre a Resumen.
 async function ldbResumenGestion(){
   const todos = await ldbTodosCasosEnriquecidos();
   const casos = todos.filter(c=>c.activo);
@@ -5301,8 +5382,18 @@ async function ldbResumenGestion(){
   casos.forEach(c=>c.transferencias.forEach(t=>{ if(f10Local(t.fecha)===hoy) transferenciasHoy++; }));
   const porModulo = {};
   casos.forEach(c=>{ porModulo[c.modulo_actual]=(porModulo[c.modulo_actual]||0)+1; });
+  return {total_activos:total, prioridad_alta:alta, mas_de_15_dias:viejos, transferencias_hoy:transferenciasHoy,
+    por_modulo:porModulo, casos, actividad_reciente:[], _actividadLista:false};
+}
+// Fase pesada: notas/usuarios + bitácora del mes (y del mes anterior si el
+// actual trae pocas notas) -- solo se llama cuando de verdad hace falta
+// (se entra a Resumen) o en segundo plano tras el arranque, nunca bloqueando
+// la primera pantalla. Muta el mismo objeto `resumen` para que Home y
+// Resumen sigan compartiendo la misma caché.
+async function ldbEnriquecerActividadResumen(resumen){
+  if(!resumen || resumen._actividadLista) return resumen;
+  const casos = resumen.casos;
   const [usuarios, notas] = await Promise.all([leerTabla('TablaUsuarios'), leerTabla('TablaNotas')]);
-
   const mesActual = ldbMesDe(ldbAhora());
   let bitacoraReciente = (await leerBitacoraDelMes(mesActual).catch(()=>[])).filter(b=>!b.es_automatica);
   if(bitacoraReciente.length < 15){
@@ -5312,7 +5403,7 @@ async function ldbResumenGestion(){
     bitacoraReciente = bitacoraReciente.concat(anteriores);
   }
   const casosPorId = {}; casos.forEach(c=>casosPorId[c.caso_id]=c);
-  const actividadReciente = bitacoraReciente
+  resumen.actividad_reciente = bitacoraReciente
     .filter(b=>casosPorId[b.caso_id])
     .sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,15).map(b=>{
     const nota = notas.find(n=>String(n.nota_predef_id)===String(b.nota_predefinida_id));
@@ -5328,8 +5419,32 @@ async function ldbResumenGestion(){
     c.ultima_bitacora = {nota_libre:c.ultima_bitacora_nota_libre, fecha:c.ultima_bitacora_fecha,
       nota_predefinida_texto: nota?nota.texto:null, autor: autor?autor.nombre:'—'};
   });
-  return {total_activos:total, prioridad_alta:alta, mas_de_15_dias:viejos, transferencias_hoy:transferenciasHoy,
-    por_modulo:porModulo, casos, actividad_reciente:actividadReciente};
+  resumen._actividadLista = true;
+  return resumen;
+}
+// Evita disparar la fase pesada dos veces en paralelo (por ejemplo, si el
+// precargado de fondo y un clic a "Resumen" casi coinciden).
+let _promesaEnriquecimientoResumen = null;
+async function obtenerResumenConActividad(forzar){
+  const r = await obtenerResumenConCache(forzar);
+  if(!r) return null;
+  if(r._actividadLista) return r;
+  if(!_promesaEnriquecimientoResumen){
+    _promesaEnriquecimientoResumen = ldbEnriquecerActividadResumen(r)
+      .catch(err=>{ console.warn('No se pudo cargar la actividad reciente de Resumen:', err); return r; })
+      .finally(()=>{ _promesaEnriquecimientoResumen = null; });
+  }
+  await _promesaEnriquecimientoResumen;
+  return r;
+}
+// Se llama sola, sin bloquear nada, apenas termina el arranque -- así, para
+// cuando alguien de verdad entra a "Resumen de Gestión", la actividad
+// reciente casi siempre ya está lista y no hay que esperarla ahí tampoco.
+function precargarActividadResumen(){
+  if(!resumenCache || resumenCache._actividadLista || _promesaEnriquecimientoResumen) return;
+  _promesaEnriquecimientoResumen = ldbEnriquecerActividadResumen(resumenCache)
+    .catch(err=>{ console.warn('No se pudo precargar la actividad reciente de Resumen:', err); return resumenCache; })
+    .finally(()=>{ _promesaEnriquecimientoResumen = null; });
 }
 
 async function ldbIndicadores(fechaDesde, fechaHasta, bodegas, convenios){
@@ -5631,7 +5746,7 @@ async function ldbCrearUsuario(nombre, email, rol, moduloAsignado){
   if(!email || !RE_EMAIL.test(email)) throw new Error('El correo no es válido.');
   ldbValidarRol(rol);
   const existentes = await leerTabla('TablaUsuarios', true);
-  if(existentes.some(u=> (u.email||'').toLowerCase()===email)){
+  if(existentes.some(u=> (u.email||'').trim().toLowerCase()===email)){
     throw new Error(`Ya existe un usuario con el correo ${email}.`);
   }
   const nuevo = {
@@ -5883,6 +5998,7 @@ async function leerNuevoLocal(file){
   const ws = wb.Sheets['NUEVO'];
   if(!ws) throw new Error("El informe no tiene una hoja llamada 'NUEVO'.");
   const filasCrudas = XLSX.utils.sheet_to_json(ws, {defval:null, raw:true});
+  if(!filasCrudas.length) throw new Error("La hoja 'NUEVO' del informe está vacía.");
   const filas = filasCrudas.map(filaCruda=>{
     const nueva = {};
     for(const [col,val] of Object.entries(filaCruda)){
@@ -5893,6 +6009,18 @@ async function leerNuevoLocal(file){
     nueva.fecha_novedad_original = filaCruda['Fecha Novedad'] ?? filaCruda['fecha novedad'] ?? nueva.fecha_novedad;
     return nueva;
   });
+  // Igual que en el archivo de bodega (ver leerBodegaLocal): si el informe
+  // viene con una columna renombrada o faltante (un reporte reexportado con
+  // encabezados distintos, por ejemplo), antes esto pasaba en silencio --
+  // las filas quedaban con "bodega"/"codigo" vacíos y por lo tanto un
+  // id_caso vacío, generando filas basura o cruces raros con lo existente en
+  // vez de un error claro. Ahora se valida ANTES de seguir.
+  const requeridasNuevo = ['bodega','codigo','producto'];
+  const presentesNuevo = new Set(Object.keys(filas[0]||{}));
+  const faltantesNuevo = requeridasNuevo.filter(c=>!presentesNuevo.has(c));
+  if(faltantesNuevo.length){
+    throw new Error(`El informe (hoja 'NUEVO') no tiene el formato esperado (faltan columnas: ${faltantesNuevo.join(', ')}).`);
+  }
   filas.forEach(f=>{
     f.bodega = limpiarValor(f.bodega);
     f.codigo = limpiarValor(f.codigo).toUpperCase();
@@ -5996,6 +6124,13 @@ function asignarCuentaLocal(filasNuevo, dictsCuentaPorBodega, dictHistorico){
 
 /* ---------- Orquestador de ingesta — ahora escribe en las TABLAS de Excel ---------- */
 async function ejecutarIngestaLocal(files, guardar){
+  // Defensa en profundidad: "Cargar Datos" ya está oculto del menú para
+  // cualquiera que no sea admin (NAV_POR_ROL), pero si por cualquier motivo
+  // se llega hasta aquí (estado de UI viejo en pantalla, rol cambiado a
+  // media sesión, etc.) esto corta de una vez con un solo mensaje claro, en
+  // vez de dejar que la carga siga y reviente en una cascada de errores de
+  // permisos de Microsoft por cada fila que intenta escribir.
+  if(guardar) _asegurarAdmin();
   const clasificados = await Promise.all(files.map(async f=>({file:f, tipo: await clasificarArchivoLocal(f)})));
   const informe = clasificados.find(c=>c.tipo==='informe');
   const bodegas = clasificados.filter(c=>c.tipo==='bodega');
@@ -6415,6 +6550,7 @@ async function completarLoginTrasRedirect(){
     ocultarLogin();
     cargarNotificaciones();
     renderUltimaActualizacionInforme();
+    precargarActividadResumen();
     toast(`Bienvenido, ${sesion.nombre}.`, true);
   } catch(err){
     mostrarLogin(err.message || 'No se pudo completar el inicio de sesión con Microsoft.');
@@ -6449,6 +6585,7 @@ async function iniciarAppLocal(){
       ocultarLogin();
       cargarNotificaciones();
       renderUltimaActualizacionInforme();
+      precargarActividadResumen();
       // La sesión guardada en localStorage puede estar desactualizada -- si un
       // administrador desactivó a este usuario o le cambió el rol en la hoja
       // "Usuarios" del Excel después de que este navegador inició sesión, no
