@@ -522,10 +522,16 @@
     #sidebar .brand{padding:0 14px 10px;}
     #main{width:100%;}
     header{flex-wrap:wrap;gap:10px;padding:12px;}
-    .search-trigger{flex:1 1 auto;}
+    header > div:last-child{width:100%;min-width:0;}
+    .search-trigger{flex:1 1 0;min-width:0;overflow:hidden;}
+    .search-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     .kpis{grid-template-columns:1fr;}
     .filters{flex-direction:column;align-items:stretch;}
     header .ultima-actualizacion-informe{display:none;}
+    /* En celular el chip de la cuenta solo muestra el avatar (el nombre y el
+       estado de conexión empujaban el botón de salir fuera de la pantalla). */
+    .account-info{display:none;}
+    .account-chip{padding:5px;}
   }
 
   /* ---------- Impresión — antes salía la app completa (barra lateral,
@@ -4298,18 +4304,26 @@ try{ SP_SESIONES = JSON.parse(sessionStorage.getItem(SP_SESIONES_CACHE_KEY) || '
 function _guardarSesionesExcelEnCache(){
   try{ sessionStorage.setItem(SP_SESIONES_CACHE_KEY, JSON.stringify(SP_SESIONES)); }catch(e){ /* sessionStorage no disponible -- sin problema, solo se pierde el ahorro */ }
 }
+// Las lecturas de arranque se disparan en paralelo (Promise.all); sin esto,
+// cada una veía "aún no hay sesión" y creaba la suya -- sesiones duplicadas
+// sobre el mismo libro. Se comparte la promesa en vuelo por libro.
+const _sesionesEnVuelo = {};
 async function _sesionExcel(driveId, itemId){
   if(itemId in SP_SESIONES) return SP_SESIONES[itemId];
-  try{
-    const r = await graphFetch(`/drives/${driveId}/items/${itemId}/workbook/createSession`, {
-      method: 'POST', body: JSON.stringify({persistChanges:true}),
-    });
-    SP_SESIONES[itemId] = r.id;
-  } catch(e){
-    SP_SESIONES[itemId] = null; // seguimos sin sesión -- más lento pero funcional
-  }
-  _guardarSesionesExcelEnCache();
-  return SP_SESIONES[itemId];
+  if(_sesionesEnVuelo[itemId]) return _sesionesEnVuelo[itemId];
+  _sesionesEnVuelo[itemId] = (async()=>{
+    try{
+      const r = await graphFetch(`/drives/${driveId}/items/${itemId}/workbook/createSession`, {
+        method: 'POST', body: JSON.stringify({persistChanges:true}),
+      });
+      SP_SESIONES[itemId] = r.id;
+    } catch(e){
+      SP_SESIONES[itemId] = null; // seguimos sin sesión -- más lento pero funcional
+    }
+    _guardarSesionesExcelEnCache();
+    return SP_SESIONES[itemId];
+  })().finally(()=>{ delete _sesionesEnVuelo[itemId]; });
+  return _sesionesEnVuelo[itemId];
 }
 /* Igual que graphFetch, pero para rutas /workbook/... -- agrega el header
    de sesión del libro correspondiente cuando existe. */
@@ -4934,21 +4948,33 @@ function _b64ToUint8(b64){
   return arr;
 }
 let _librosMes = {}; // 'YYYY-MM' -> {driveId, itemId}
-async function libroDelMes(aaaaMm){
+const _librosMesEnVuelo = {};
+// crearSiFalta=false (lecturas): si el libro del mes aún no existe NO se crea
+// -- antes, solo con VER Resumen se intentaba subir un Excel nuevo a
+// SharePoint (una lectura con efecto de escritura, incluso para un usuario de
+// solo lectura, y con varias personas a la vez podía duplicar la creación).
+async function libroDelMes(aaaaMm, crearSiFalta){
+  if(crearSiFalta === undefined) crearSiFalta = true;
   if(_librosMes[aaaaMm]) return _librosMes[aaaaMm];
-  const folderId = await _folderHistorial();
-  const nombre = `Bitacora_${aaaaMm}.xlsx`;
-  const hijosVal = await graphFetchPaginado(`/drives/${SP_DRIVE_ID}/items/${folderId}/children`);
-  let itemId = hijosVal.find(f=>f.name===nombre)?.id;
-  if(!itemId){
-    const bytes = _b64ToUint8(BITACORA_PLANTILLA_B64);
-    const subido = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${folderId}:/${nombre}:/content`, {
-      method:'PUT', body: bytes, headers: {'Content-Type':'application/octet-stream'},
-    });
-    itemId = subido.id;
-  }
-  _librosMes[aaaaMm] = {driveId: SP_DRIVE_ID, itemId};
-  return _librosMes[aaaaMm];
+  const clave = aaaaMm + '|' + (crearSiFalta?'c':'l');
+  if(_librosMesEnVuelo[clave]) return _librosMesEnVuelo[clave];
+  _librosMesEnVuelo[clave] = (async()=>{
+    const folderId = await _folderHistorial();
+    const nombre = `Bitacora_${aaaaMm}.xlsx`;
+    const hijosVal = await graphFetchPaginado(`/drives/${SP_DRIVE_ID}/items/${folderId}/children`);
+    let itemId = hijosVal.find(f=>f.name===nombre)?.id;
+    if(!itemId){
+      if(!crearSiFalta) return null;
+      const bytes = _b64ToUint8(BITACORA_PLANTILLA_B64);
+      const subido = await graphFetch(`/drives/${SP_DRIVE_ID}/items/${folderId}:/${nombre}:/content`, {
+        method:'PUT', body: bytes, headers: {'Content-Type':'application/octet-stream'},
+      });
+      itemId = subido.id;
+    }
+    _librosMes[aaaaMm] = {driveId: SP_DRIVE_ID, itemId};
+    return _librosMes[aaaaMm];
+  })().finally(()=>{ delete _librosMesEnVuelo[clave]; });
+  return _librosMesEnVuelo[clave];
 }
 async function listarMesesDisponibles(){
   const folderId = await _folderHistorial();
@@ -4958,7 +4984,9 @@ async function listarMesesDisponibles(){
     .map(n=>n.slice('Bitacora_'.length, -('.xlsx'.length))).sort();
 }
 async function leerBitacoraDelMes(aaaaMm, forzar){
-  const {driveId, itemId} = await libroDelMes(aaaaMm);
+  const libro = await libroDelMes(aaaaMm, false);
+  if(!libro) return []; // ese mes aún no tiene libro -- simplemente no hay notas
+  const {driveId, itemId} = libro;
   return leerTablaEn(driveId, itemId, 'TablaBitacora', COLUMNAS_BITACORA, forzar);
 }
 async function agregarBitacoraEnMes(aaaaMm, obj){
