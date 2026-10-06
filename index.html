@@ -4298,6 +4298,12 @@ async function graphFetch(path, opciones){
 // Se guarda en sessionStorage (mismo alcance que MSAL -- dura solo mientras
 // la pestaña sigue abierta) y, si ya expiró, graphFetchWB ya sabe detectarlo
 // y crear una nueva sola (ver InvalidSession/SessionNotFound abajo).
+// Graph devuelve el error de sesión de libro con código/mensaje que varía
+// según idioma y servicio ("InvalidSession", "SessionNotFound", o texto local
+// como "La sesión de destino no es válida" / "The target session is not valid").
+// Comparar solo por código dejaba pasar la versión en español y la carga fallaba.
+const _RX_ERROR_SESION_WB = /InvalidSession|SessionNotFound|sesi[oó]n de destino|sesi[oó]n.{0,40}no (es|est[aá]) v[aá]lida|session.{0,40}(not valid|invalid|expired|not found)|target session/i;
+function _esErrorSesionWB(t){ return _RX_ERROR_SESION_WB.test(String(t||'')); }
 const SP_SESIONES_CACHE_KEY = 'faltantes_sp_sesiones_v1';
 let SP_SESIONES = {}; // itemId -> sessionId (o null si no se pudo crear)
 try{ SP_SESIONES = JSON.parse(sessionStorage.getItem(SP_SESIONES_CACHE_KEY) || '{}') || {}; }catch(e){ SP_SESIONES = {}; }
@@ -4339,7 +4345,7 @@ async function graphFetchWB(driveId, itemId, path, opciones){
     // reintenta una vez. Se revisa e.raw (el mensaje crudo de Graph) y no
     // e.message, porque graphFetch ahora sanitiza e.message antes de que
     // llegue a la persona usuaria -- ver comentario ahí.
-    if(sesionId && /InvalidSession|SessionNotFound/i.test(e.raw||e.message||'')){
+    if(sesionId && _esErrorSesionWB((e.raw||'')+' '+(e.message||''))){
       delete SP_SESIONES[itemId];
       _guardarSesionesExcelEnCache();
       const nueva = await _sesionExcel(driveId, itemId);
@@ -4591,7 +4597,7 @@ async function graphFetchWBBatch(driveId, itemId, subrequests){
       // se reintenta ese mismo lote una vez (igual que hace graphFetchWB con
       // una sola solicitud).
       const huboErrorSesion = respuestas.some(resp=> resp.status>=400 &&
-        /InvalidSession|SessionNotFound/i.test(JSON.stringify(resp.body && resp.body.error || '')));
+        _esErrorSesionWB(JSON.stringify(resp.body && resp.body.error || '')));
       if(huboErrorSesion){
         delete SP_SESIONES[itemId];
         _guardarSesionesExcelEnCache();
@@ -4668,7 +4674,7 @@ async function eliminarFilasPorIndiceEn(driveId, itemId, tabla, indices){
     let r = await graphFetch('/$batch', {method:'POST', body: JSON.stringify(armar(sesionId))});
     let respuestas = r.responses || [];
     const huboErrorSesion = respuestas.some(resp=> resp.status>=400 &&
-      /InvalidSession|SessionNotFound/i.test(JSON.stringify(resp.body && resp.body.error || '')));
+      _esErrorSesionWB(JSON.stringify(resp.body && resp.body.error || '')));
     if(huboErrorSesion){
       delete SP_SESIONES[itemId];
       sesionId = await _sesionExcel(driveId, itemId);
